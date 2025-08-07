@@ -1,0 +1,83 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4155412b-b190-4d02-9f98-f260bf2b9d30')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4155412b-b190-4d02-9f98-f260bf2b9d30')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "NRT",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Cisco Duo: User reported fraud",
+                "description": "A user has reported a Cisco Duo 2-factor authentication request as fraud. This means that the user was not expecting to receive the request and the account credentials are likely compromised.\n\nHandling guidance: Confirm with the user that the 2-factor authentication request was unexpected. Mark the account as high risk and submit a password reset ticket to service desk.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Gunther Abbot\r\n// Reviewer:\r\n//\r\n// Description: A user has reported a Cisco Duo 2-factor authentication request as fraud. This means that the user was not expecting to receive the request and the account credentials are likely compromised.\r\n//\r\n// Handling guidance: Confirm with the user that the 2-factor authentication request was unexpected. Mark the account as high risk and submit a password reset ticket to service desk. Also submit a SYSP ticket to revoke sessions for the account.\r\n//\r\n// Date     | Author             | Change notes\r\n// ---------------------------------------------------\r\n// 03/14/23 | gabbot             | Initial version\r\n//\r\nCiscoDuo_CL\r\n| where result_s == \"fraud\"\r\n| where reason_s == \"user_marked_fraud\"",
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1621"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "user_name_s"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "access_device_hostname_s"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "access_device_ip_s"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

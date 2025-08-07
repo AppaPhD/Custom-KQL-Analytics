@@ -1,0 +1,97 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/3b55b7b0-eefd-44d1-9b27-a9ee62834967')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/3b55b7b0-eefd-44d1-9b27-a9ee62834967')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: MDE - Clear Event Logs",
+                "description": "This analytic detects when a device runs the windows event utility tool to clear ANY logs from the system. This could be an indicator of an attacker trying to evade defenses. \n Handling Guidance: 1. Check the processes that preceded the clearing event and see if there are any files that look suspicious. 2. Reach out to the user to confirm if they did that manually (there should almost never be a time where this is done programmatically)",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: Obadiah\r\n// Reviewer: \r\n// Reference:\r\n//\r\n// Description: Looking for event logs being cleared by the command line utility \"wevtutil.\" This is not the only way the logs can be cleared, but if logs are being cleared it is most often a sign of an attacker trying to hide their tracks. \r\n// Handling Guidance: Isolate the device. Begin incident response procedures. \r\n//\r\n// Change notes\r\n// ------------\r\n// 06/08/23 Obadiah Bridges - added description, handling guidance and boilerplate\r\n// \r\n//\r\n// Query: \r\nDeviceProcessEvents\r\n| where ProcessCommandLine has \"wevtutil cl\"\r\n| extend domain = extract(\"\\\\..*\", 0, DeviceName)\r\n| extend domain = substring(domain,1, strlen(domain))\r\n| summarize count() by ProcessCommandLine, AccountDomain, AccountName, DeviceName, domain\r\n",
+                "queryFrequency": "PT10M",
+                "queryPeriod": "PT10M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1070",
+                    "T1564"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "csgp_clear_event_logs on {{DeviceName}} by {{AccountName}}",
+                    "alertDescriptionFormat": "Command line: {{ProcessCommandLine}}",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

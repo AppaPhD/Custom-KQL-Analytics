@@ -1,0 +1,87 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/634b1b05-e991-42aa-8821-4164f914dc83')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/634b1b05-e991-42aa-8821-4164f914dc83')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: ExchangeOnline - Multiple users email forwarded to same destination",
+                "description": "Enabled 06/10 by kc - tweaked the rule a bit and put it back into dev with auto assign.\n\nDISABLE NOTE:  Disabled by LT on 3/17. The analytic behind this rule is well intentioned, but it is not capturing the intended information. It needs to be re-evaluated / rewritten. \n\nIdentifies when multiple (more than one) users mailboxes are configured to forward to the same destination. \nThis could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "// Contributor: Obadiah/Kevin Cleavinger\n// Source:  \n// Reviewer: Grover Mewborn\n//\n// Description: Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination. \n//This could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.\n// Handling Guidance: Determine why the mailbox forwarding rules have been put in place. Reach out to the user's in question to determine whether this is legitimate activity or suspicious behavior. \n//\n//\n// Change notes\n// ------------\n// 05/02/23 Obadiah Bridges - updated boilerplate, handling guidance and description. Moved to production. \n// 05/05/23 Obadiah Bridges - this alert does not properly identify the user who's emails are being forwarded. We only get the user who's inbox is receiving the forward.\n// Query:\nlet timeframe = 7d;\nOfficeActivity\n| where TimeGenerated >= ago(timeframe)\n| where Operation =~ \"Set-Mailbox\"\n| where Parameters contains \"ForwardingSmtpAddress\"\n| extend parsed = parse_json(Parameters)\n| extend parameterName = parsed[1].Name, fwdingDestination = tostring(parsed[1].Value)\n| where isnotempty(fwdingDestination)\n| extend ClientIPOnly = case( \nClientIP has \".\", tostring(split(ClientIP,\":\")[0]), \nClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))),\nClientIP\n)  \n| extend Port = case(\nClientIP has \".\", (split(ClientIP,\":\")[1]),\nClientIP has \"[\", tostring(split(ClientIP,\"]:\")[1]),\nClientIP\n)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = makeset(UserId), \nPorts = makeset(Port), EventCount = count() by fwdingDestination, ClientIP = ClientIPOnly \n| where DistinctUserCount > 1\n| mvexpand UserId\n| extend UserId = tostring(UserId), Ports = tostring(Ports)\n| distinct StartTimeUtc, EndTimeUtc, UserId, DistinctUserCount, ClientIP, Ports, fwdingDestination, EventCount\n| extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P7D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Collection",
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1114",
+                    "T1020"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "871ba14c-88ef-48aa-ad38-810f26760ca3",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "_csgp: ExchangeOnline - Multiple users email forwarded to same destination",
+                    "alertDescriptionFormat": "Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination. \nThis could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.\n\nHandling guidance: \nReview the forwarding destination identified in this alert - is this activity suspect? \nWho created the forwarding rules? \nYou may need to determine why the mail forwarding rules were created. \nConsult with the Exchange team if necessary.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "FwdingDestination": "fwdingDestination"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

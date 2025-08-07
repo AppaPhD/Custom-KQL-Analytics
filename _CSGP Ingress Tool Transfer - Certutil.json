@@ -1,0 +1,105 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/26ea2d6f-07c8-474d-9c0d-5bb1366719b2')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/26ea2d6f-07c8-474d-9c0d-5bb1366719b2')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Ingress Tool Transfer - Certutil",
+                "description": "This detection addresses most of the known ways to utilize this binary for malicious/unintended purposes. \nIt attempts to accommodate for most detection evasion techniques, like commandline obfuscation and binary renaming.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: \n// Reviewer: \n// Reference:\n//\n// Description: This detection addresses most of the known ways to utilize this binary for malicious/unintended purposes. It attempts to accommodate for most detection evasion techniques, like commandline obfuscation and binary renaming.\n// Handling Guidance: \n//\n// Date     | Author             | Change notes\n// ---------------------------------------------------\n//          | aedelstein         | Added entity mapping to existing rule\n// 03/15/23 | gabbot             | Excluded chrome_crashpad_handler\n// 05/20/25 | ltrainer           | excluded winatp.cer to eliminate FPs from MDE client analyzer\n// 01/22/25 | ecralev            | excluded SenseIR.exe as InitiatingProcessParentFileName for Live Response script to retrieve browser history.\n//\n// Set the time span for the query.\nlet Timeframe = 1h;\n// Set the HashTimeframe for the hash lookup; longer makes it more accurate, but obviously also more resource-intensive.\nlet HashTimeframe = 14d;\n// Get all known SHA1 hashes for certutil executions or renamed files formerly named certutil.\nlet CertUtilPESha1=materialize(DeviceProcessEvents\n    | where Timestamp > ago(HashTimeframe)\n    | where ProcessVersionInfoOriginalFileName == \"CertUtil.exe\"\n    | where isnotempty(SHA1)\n    | summarize sha1=make_set(SHA1));\nlet CertUtilFESha1=materialize(DeviceFileEvents\n    | where Timestamp > ago(HashTimeframe)\n    | where PreviousFileName contains \"certutil\" or FileName contains \"certutil\"\n    | where isnotempty(SHA1)\n    | summarize sha1=make_set(SHA1));\nDeviceProcessEvents\n| where Timestamp >= ago(Timeframe)\n// Get all executions by processes with a SHA1 hash that is or was named certutil.\n| where SHA1 in (CertUtilPESha1)\n    or SHA1 in (CertUtilFESha1)\n    or FileName =~ \"certutil.exe\"\n    or ProcessCommandLine has \"certutil\"\n// Exclude noisy false positive - chrome_crashpad_handler\n| where ProcessCommandLine !startswith_cs \"/opt/google/chrome/chrome_crashpad_handler\"\n// Create a new field called CleanProcessCommandLine which gets populated with the value of ProcessCommandLine as Windows parses it for execution, \n// removing any potential command line obfuscation. \n| extend CleanProcessCommandLine=parse_command_line(ProcessCommandLine, \"windows\")\n// Search for de-obfuscated commands used. \n// Urlcache is the documented attribute. However, url is also accepted.\n// Verifyctl is the documented attribute. However, verify is also accepted.\n| where CleanProcessCommandLine has_any (\"decode\", \"encode\", \"verify\", \"url\") \n| where not(ProcessCommandLine endswith \"winatp.cer\") //Exclude MDE Client Analyzer\n| where InitiatingProcessParentFileName != \"SenseIR.exe\"\n| sort by TimeGenerated desc",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CommandAndControl",
+                    "DefenseEvasion"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "CleanProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

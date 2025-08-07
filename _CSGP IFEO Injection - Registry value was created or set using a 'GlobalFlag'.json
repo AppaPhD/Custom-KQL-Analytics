@@ -1,0 +1,115 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f34b453f-8ea2-4714-b505-d6438846a84c')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f34b453f-8ea2-4714-b505-d6438846a84c')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: IFEO Injection - Registry value was created or set using a 'GlobalFlag'",
+                "description": "Detects when a registry value is created or set within the \"Image File Execution Options\" hive. This activity shouldn't happen normally and could potentially indicate compromise.\n\nHandling Guidance: Investigate the process execution, host and account. Reach out to any involved users and confirm if this was intentional. Escalate to the Endpoint Security Team for further investigation",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Nixy Camacho\r\n// Source: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/207891930/IFEO+Security+Assessment \r\n// References: https://costar-group-prod-dev.atlassian.net/browse/SEC-12178 (ticket)\r\n// Reviewer: Grover Mewborn\r\n// Handling Guidance: Investigate the process execution, host and account. Esclate to the Endpoint Security Team for further investigation\r\n//// Change notes\r\n// ------------\r\n// 11/05/24 Nixy Camacho - after discussion w/ Grover, put in _DEV\r\n//\r\nDeviceRegistryEvents\r\n| where ActionType in (\"RegistryValueSet\", \"RegistryKeyCreated\", \"RegistryKeyRenamed\")\r\n| where RegistryKey startswith \"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\\"\r\n| where InitiatingProcessCommandLine has \"reg.exe\" and InitiatingProcessCommandLine has \"GlobalFlag\"\r\n| project TimeGenerated, ActionType, DeviceName, MachineGroup, InitiatingProcessAccountName, InitiatingProcessParentFileName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, RegistryKey, RegistryValueName, RegistryValueType, RegistryValueData, InitiatingProcessRemoteSessionDeviceName, InitiatingProcessRemoteSessionIP",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution",
+                    "Persistence",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT3H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ProcessId",
+                                "columnName": "InitiatingProcessParentFileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "InitiatingProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "RegistryKey",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Key",
+                                "columnName": "RegistryKey"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "RegistryValue",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "RegistryValueName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

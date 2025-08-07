@@ -1,0 +1,115 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/60acf69f-e37e-421c-9398-6967cade51c3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/60acf69f-e37e-421c-9398-6967cade51c3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: MDE - Inhibit system recovery / delete volume shadow copies",
+                "description": "This query identifies attempts to delete built-in OS system recovery data, a technique that may be indicative of ransomware.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Analytic Rule Name: _DEV: Inhibit system recovery / delete volume shadow copies\r\n//\r\n// Contributor: Lucas Trainer\r\n// Source: \r\n// Reviewer: Mohamed Elgendy\r\n//\r\n// Description: This query identifies attempts to delete built-in OS system recovery data, a technique that may be indicative of ransomware.\r\n//\r\n// Handling guidance: Determine if the activity in the alert is consistent with malicious behavior to inhibit system recovery\r\n// Review the process execution & lineage and user account activities. Look for other alerts on the device that further indicate malicious activity \r\n// promptly escalate to the Endpoint team and being the IR procedure and response plan, if there is any indication of malware / ransomware. \r\n// \r\n// MITRE ATT&CK Reference: https://attack.mitre.org/techniques/T1490\r\n//\r\n// Query:\r\nDeviceProcessEvents\r\n| where FileName == \"vssadmin.exe\"\r\n| where ProcessCommandLine has \"delete\" and ProcessCommandLine has \"shadows\"\r\n| extend RunAsAdmin = iff((ProcessIntegrityLevel == \"High\" and ProcessTokenElevation == \"TokenElevationTypeFull\"), \"True\", \"False\")\r\n| extend Hostname = trim_end(@\"\\..+\",DeviceName)\r\n| extend Domain = trim_start(@\"\\w+\",DeviceName)\r\n| project TimeGenerated, AccountName, DeviceName, Hostname, Domain, InitiatingProcessParentFileName, InitiatingProcessFileName, FileName, ProcessCommandLine, RunAsAdmin",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "P1D",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "MDE - Inhibit system recovery / delete volume shadow copies, {{Hostname}}, {{AccountName}}",
+                    "alertDescriptionFormat": "Description: This query identifies attempts to delete built-in OS system recovery data, a technique that may be indicative of ransomware.\n\nHandling guidance: Determine if the activity in the alert is consistent with malicious behavior to inhibit system recovery, review the process execution & lineage and user account activities. Look for other alerts on the device that further indicate malicious activity, promptly escalate to the Endpoint team and being the IR procedure and response plan, if there is any indication of malware / ransomware. \n\nDeviceName: {{DeviceName}}\n\n\n\t\nProcessCommandLine: {{ProcessCommandLine}}\n\nRunAsAdmin: {{RunAsAdmin}}"
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "Hostname"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "Domain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessParentFileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessFileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

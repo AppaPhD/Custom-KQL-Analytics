@@ -1,0 +1,107 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/940ccf67-4eb4-4a14-a43a-87919b3bd5bb')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/940ccf67-4eb4-4a14-a43a-87919b3bd5bb')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Endpoint: Suspicious Volume Shadow Copy Commands",
+                "description": "Alert on vssadmin usage along with creating and modifing shadow copies.\n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "    // The query_now parameter represents the time (in UTC) at which the scheduled analytics rule ran to produce this alert.\n// Contributor: \n// Reviewer: jkim2\n// Reference:\n//\n// Description: \n// Handling Guidance: Identify if this usage of vssadmin is benign or likely malicious:\n// -Confirm with user / system owner whether volume shadow copy activity is expected.\n// -Inspect the content of the command line and the action being performed.\n// -Pivot to the host to examine what other commands and activity are occuring.\n// If this activity is observed on a domain controller, it's most likely an indication of compromise:\n// Begin escalation to the endpoint security team manager for incident response.\n//\n// Date     | Author             | Change notes\n// ---------------------------------------------------\n// 1/4/24   | James              | Added boiler plate, handling guidance, excluding SupportAssistAgent.exe for Dell support assist\n// 6/28/24  | James              | Added glantylt-021 to the exclusions, this is initiated by CentraStage. BATCH script was previously analysed and it's used for managing system restore points.\n// 2/13/25  | James              | Excluding activity from Dell Support Assist\n// Exclusions: \nlet AccountNamesWhitelist_ = dynamic([\"bmercedes\"]);\nlet DeviceNamesWhitelist_ = dynamic([\"pprdw2\", \"glantylt-021\"]);\nlet InitiatingProcessCommandLineWhitelist_ = dynamic([\"\\\"wscript.exe\\\" \\\"C:\\\\MININT\\\\Scripts\\\\LTICleanup.wsf\\\"\"]);\n// Main Analytic Query:\nlet identityinfo_ = (\n    IdentityInfo \n    // | where TimeGenerated >= ago(14d)\n    | distinct\n        AccountName,\n        AccountDisplayName,\n        AccountUPN,\n        OnPremisesDistinguishedName,\n        IsAccountEnabled,\n        Manager,\n        Department,\n        JobTitle,\n        AccountSID\n    );\nDeviceProcessEvents\n// | where TimeGenerated >= ago(15m)\n//Apply Exclusions\n| where not (AccountName has_any (AccountNamesWhitelist_))\n| where not (DeviceName has_any (DeviceNamesWhitelist_))\n| where InitiatingProcessParentFileName != \"SupportAssistAgent.exe\"\n| where InitiatingProcessParentFileName != \"CagService.exe\" and InitiatingProcessCommandLine !endswith 'command.bat\"'\n| where InitiatingProcessCommandLine !startswith \"cmd.exe /c vssadmin list shadows /For=C: | findstr\"\n| where InitiatingProcessVersionInfoInternalFileName <> \"DellSupportAssistRemedationService.exe\"\n| where InitiatingProcessParentFileName <> \"DellSupportAssistRemedationService.exe\"\n| where ProcessCommandLine <> \"vssadmin  list shadowstorage /on=C:\"\n| where not (InitiatingProcessCommandLine has_any (InitiatingProcessCommandLineWhitelist_))\n| where DeviceName !contains \"mail\"\n    and DeviceName !contains \"ftp\"\n    and DeviceName !contains \"fs\"\n| where (ProcessCommandLine has \"vssadmin\" and ProcessCommandLine contains \"shadow\")\n// Join Identity Info \n| join kind=leftouter identityinfo_ on $left.InitiatingProcessAccountSid == $right.AccountSID\n// Entity Mapping Parsing\n| extend HostName_ = toupper(trim_end(@\"\\..+\", DeviceName))\n| extend HostDomain_ = extract(@\"\\.[a-zA-Z]+\\.[a-zA-Z]+\\.[a-zA-Z]+\", 0, DeviceName)\n| extend UserContext_ = strcat(\"User context: \", AccountDisplayName, \"  |  Department: \", Department, \"  |  Title: \", JobTitle, \" | Manager: \", Manager)\n////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n// Custom Fields for Alert Description:\n// User Info:\n// Device Info:\n// IncidentResponsePlan\n//| extend IncidentResponsePlan_ = \"https://wiki.costargroup.com/display/GOV/Incident+Response+Plan\"\n// Event Summary\n| extend EventContext_ = strcat(\n                             \"Event Context: \",\n                             \"\\n\",\n                             UserContext_\n                         )\n// Alert & Incident Description\n| extend Title_ = strcat(\"Endpoint: Suspicious Volume Shadow Copy (vssadmin) commands on \", HostName_)\n| extend Description_ = strcat(\n                            \"Suspicious command '\",\n                            ProcessCommandLine,\n                            \"' executed by \",\n                            FileName,\n                            \"\\n\",\n                            \"InitiatingProcessFilename: \",\n                            InitiatingProcessFileName,\n                            \" with command line: \",\n                            InitiatingProcessCommandLine,\n                            \"\\n\",\n                            \"\\n\",\n                            \"User: \",\n                            InitiatingProcessAccountName,\n                            \"\\n\",\n                            \"Device: \",\n                            DeviceName,\n                            \"\\n\", \n                            \"\\n\",\n                            \"Background: vssadmin is used to create a volume shadow copy which allows read and write action on files locked by windows, including the Ntds.dit file that stores sensitive Active Directory credentials.\",\n                            \"\\n\",\n                            \"This analytic identifies command line activity indicating vssadmin usage for creation or deletion of volume shadow copies. \"\n    \"\\n\",\n                            \"These actions may be a precursor to ransomware, or when performed on a domain controller, used for credential theft.\",\n                            \"\\n\\n\",\n                            \"References: https://attack.mitre.org/techniques/T1490/ & https://attack.mitre.org/techniques/T1003/003/\"\n                        )\n| extend HandlingGuidance_ = strcat(\n                                 \"Handling Guidance: \",\n                                 \"\\n\",\n                                 \"Identify if this usage of vssadmin is benign or likely malicious:\"\n    \"\\n\",\n                                 \"-Confirm with user / system owner whether volume shadow copy activity is expected.\"\n    \"\\n\",\n                                 \"-Inspect the content of the command line and the action being performed.\"\n    \"\\n\",\n                                 \"-Pivot to the host to examine what other commands and activity are occuring.\"\n    \"\\n\",\n                                 \"If this activity is observed on a domain controller, it's most likely an indication of compromise:\", \n                                 \"\\n\",\n                                 \"Begin escalation to the endpoint security team manager for incident response.\"\n                             )\n////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n// Projection & Summarize Cleanup\n| project\n    TimeGenerated,\n    Title_,\n    Description_,\n    HandlingGuidance_,\n    UserContext_,\n    ActionType,\n    AccountName,\n    AccountUpn,\n    DeviceName,\n    InitiatingProcessAccountName,\n    FileName,\n    ProcessCommandLine,\n    InitiatingProcessParentFileName,\n    FolderPath,\n    InitiatingProcessFileName,\n    InitiatingProcessCommandLine\n| sort by TimeGenerated desc",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess",
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1003",
+                    "T1490"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{Title_}}",
+                    "alertDescriptionFormat": "{{Description_}} <br>\n<br>\n{{HandlingGuidance_}}\n",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

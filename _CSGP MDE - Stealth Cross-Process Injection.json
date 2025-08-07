@@ -1,0 +1,76 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5c06cf07-048d-48dd-ba58-3bc4a9307ecb')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5c06cf07-048d-48dd-ba58-3bc4a9307ecb')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: MDE - Stealth Cross-Process Injection",
+                "description": "Adversaries may abuse mshta.exe to proxy execution of malicious .hta files and Javascript or VBScript through a trusted Windows utility. This detector identifies instances of mshta.exe injecting a thread to execute into another process. Attackers use the API CreateRemoteThread to create a new thread in a remote process. They then use APIs SetThreadContext and QueueUserAPC to redirect the existing thread to an arbitrary address.\n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "High",
+                "enabled": true,
+                "query": "// Analytic Rule Name: _DEV: Endpoint Stealth Cross-process injection\n// Contributor: Mohamed Elgendy\n// Source: Praetorian Purple Teaming 2022\n// Reviewer: Obadiah \n//\n// Description: Adversaries may abuse mshta.exe to proxy execution of malicious .hta files and Javascript or VBScript through a trusted Windows utility. \n// This detector identifies instances of mshta.exe injecting a thread to execute into another process.\n// Handling guidance: \n//\n// MITRE ATT&CK Reference: https://attack.mitre.org/techniques/T1218/005/, https://attack.mitre.org/techniques/T1055/, https://attack.mitre.org/techniques/T1055/003/\n////// Change notes\n// ------------\n// 06/07/23 Obadiah Bridges - updated boilerplate. promoted to CSGP. \n// 06/23/23 Obadiah & Dawinder - updated query to remove false positives and alert on all instances of mshta.exe executing .hta files. \n//\n// Query\nDeviceEvents\n| where ActionType contains \"RemoteThreadApiCall\" or ActionType contains \"MemoryRemoteApiCall\"\n| where (InitiatingProcessCommandLine contains \"mshta.exe\" or InitiatingProcessFileName contains \"mshta.exe\" or InitiatingProcessFolderPath contains \"mshta.exe\")\n| where (InitiatingProcessCommandLine contains \".hta\" or InitiatingProcessFileName contains \".hta\" or InitiatingProcessFolderPath contains \".hta\")\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1055",
+                    "T1218"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT2H",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "InitiatingProcessCommandLine"
+                            },
+                            {
+                                "identifier": "ProcessId",
+                                "columnName": "InitiatingProcessId"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

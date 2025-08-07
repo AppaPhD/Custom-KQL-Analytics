@@ -1,0 +1,116 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6d27cb9c-7fbb-4461-bf64-d28b3b15fe3b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6d27cb9c-7fbb-4461-bf64-d28b3b15fe3b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Excessive Listing/Getting GuardDuty Detector Calls by IAM Users",
+                "description": "This alert detects IAM users making an unusually high number of 'ListDetectors' or 'GetDetector' API calls to AWS GuardDuty. These actions are used to query GuardDuty detectors, which may indicate reconnaissance activity or misuse of access rights\n\nHandling Guidance: Check the user's job role to determine if the activity aligns with their responsibilities, and reach out to confirm if it was intentional. If the user\u2019s actions are unnecessary or excessive, see what other actions the user is taking and if you believe that the user is compromised, please refer to this document for further guidance: https://wiki.costargroup.com/pages/viewpage.action?pageId=866618934",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Kamran Ahmadjan\r\n// Reviewer: stanveer\r\n// Reference: \r\n//\r\n// Description: This alert detects IAM users making an unusually high number of 'ListDetectors' or 'GetDetector' API calls to AWS GuardDuty. These actions are used to query GuardDuty detectors, which may indicate reconnaissance activity or misuse of access rights- Discovery (TA0007), Cloud Service Discovery (T1526), Security Software Discovery (T1518)\r\n// Handling Guidance: Check the user's job role to determine if the activity aligns with their responsibilities, and reach out to confirm if it was intentional. If the user\u2019s actions are unnecessary or excessive, see what other actions the user is taking and if you believe that the user is compromised, please refer to this document for further guidance: https://wiki.costargroup.com/pages/viewpage.action?pageId=866618934\r\nlet zscaler =  _GetWatchlist('Zscaler_Public_IP_Ranges')\r\n    | project IP, Source;\r\nlet CostarIPs = _GetWatchlist('Costar_Public_IP_Ranges')\r\n    | project cidr, name;\r\nlet eventname1 = dynamic([\"GetDetector\", \"ListDetectors\"]);\r\nAWSCloudTrail\r\n| where SessionIssuerArn startswith \"arn:aws:iam\"\r\n| where EventName in (eventname1)\r\n| where UserIdentityArn contains \"@\" and UserIdentityArn !contains \"aws_security_prd_security\" or UserIdentityArn contains \"svc\"\r\n| summarize \r\n    GetDetectorCount = countif(EventName == \"GetDetector\"),\r\n    ListDetectorsCount = countif(EventName == \"ListDetectors\")\r\n    by UserIdentityArn, UserIdentityAccountId, SourceIpAddress, UserAgent, EventName\r\n| where GetDetectorCount >= 7 or ListDetectorsCount >= 7\r\n| evaluate ipv4_lookup(zscaler, SourceIpAddress, IP, return_unmatched = true)\r\n| evaluate ipv4_lookup(CostarIPs, SourceIpAddress, cidr, return_unmatched = true)\r\n| extend CostarIPs = coalesce(ipv4_is_in_range(SourceIpAddress, cidr), False)\r\n| extend ZscalerIP = coalesce(ipv4_is_in_range(SourceIpAddress, IP), False)\r\n| extend UniqueKey = strcat(UserIdentityArn, \"-\", EventName)\r\n| summarize arg_min(UniqueKey, *) by UserIdentityArn\r\n| project\r\n    UserIdentityArn,\r\n    UserIdentityAccountId,\r\n    UserAgent,\r\n    SourceIpAddress,\r\n    ZscalerIP,\r\n    CostarIPs,\r\n    name,\r\n    GetDetectorCount,\r\n    ListDetectorsCount",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1518",
+                    "T1526"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ZscalerIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "CostarIPs"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ProcessId",
+                                "columnName": "GetDetectorCount"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ProcessId",
+                                "columnName": "ListDetectorsCount"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

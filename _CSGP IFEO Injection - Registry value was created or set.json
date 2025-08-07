@@ -1,0 +1,115 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8b9053eb-95bd-407b-8175-0cb95f8fa713')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8b9053eb-95bd-407b-8175-0cb95f8fa713')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: IFEO Injection - Registry value was created or set",
+                "description": "Detects when a registry value is created or set within the \"Image File Execution Options\" hive. This activity shouldn't happen normally and could potentially indicate compromise.\n\nHandling Guidance: Investigate the process execution, host and account. Reach out to any involved users and confirm if this was intentional. Escalate to the Endpoint Security Team for further investigation",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Nixy Camacho\r\n// Source: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/207891930/IFEO+Security+Assessment \r\n// References: https://costar-group-prod-dev.atlassian.net/browse/SEC-12178 (ticket)\r\n// Reviewer: Grover Mewborn\r\n// Handling Guidance: Investigate the process execution, host and account. Esclate to the Endpoint Security Team for further investigation\r\n//// Change notes\r\n// ------------\r\n// 11/04/24 Nixy Camacho - after discussion w/ Grover, put in _DEV\r\n// 4/11/25 - Adrian Shina - exclude vmcompute.exe and vmwp.exe which is responsible for managing and running virtual machines on a host system.\r\nDeviceRegistryEvents\r\n| where RegistryKey startswith \"HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\\"\r\n| where ActionType in (\"RegistryValueSet\", \"RegistryKeyCreated\", \"RegistryKeyRenamed\") and isnotempty(RegistryValueData)\r\n| where RegistryValueData matches regex @\".+\\.[a-z]{3}\" and RegistryValueData != \"vrfcore.dll vfbasics.dll vfcompat.dll vfluapriv.dll vfprint.dll vfnet.dll vfntlmless.dll vfnws.dll vfcuzz.dll\"\r\n| where DeviceName != \"scottwheeler-laptop\" // Temporary suppression for Swheeler's laptop reporting although not enrolled anymore in Intune, see https://costar-group-prod-dev.atlassian.net/browse/SCSP-142348 and https://costar-group-prod-dev.atlassian.net/issues/USHD-653136\r\n| where RegistryValueData <> \"C:\\\\Windows\\\\System32\\\\vmcompute.exe\" and RegistryValueData <> \"C:\\\\Windows\\\\System32\\\\vmwp.exe\"\r\n| project TimeGenerated, ActionType, DeviceName, MachineGroup, InitiatingProcessAccountName, InitiatingProcessFolderPath, RegistryKey, RegistryValueData, RegistryValueName",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation",
+                    "Persistence",
+                    "Execution"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT3H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessFolderPath"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "RegistryKey",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Key",
+                                "columnName": "RegistryKey"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "RegistryValue",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "RegistryValueName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "RegistryValue",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "RegistryValueData"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

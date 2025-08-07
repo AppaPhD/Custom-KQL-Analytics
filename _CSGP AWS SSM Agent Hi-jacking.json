@@ -1,0 +1,84 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/0e1146ad-955a-4352-9e98-a5ae4f106635')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/0e1146ad-955a-4352-9e98-a5ae4f106635')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS SSM Agent Hi-jacking",
+                "description": "This alert triggers when there is suspicious activity regarding AWS SSM agent service being stopped and restarted under the control of an attacker.\n\nHandling Guidance: Use the \"AccountDomain\" field to determine which AWS instance has been affected. Contact SecOps to properly contain the instance. Investigate any additional commands ran on the instance after the hi-jacking to determine the actions that the attacker took.",
+                "severity": "High",
+                "enabled": true,
+                "query": "// Contributor: Obadiah Bridges\r\n// Reviewer: \r\n// Reference: https://www.mitiga.io/blog/abusing-the-amazon-web-services-ssm-agent-as-a-remote-access-trojan\r\n//\r\n// Description: This alert triggers when there when an attacker is attempting to hijack the AWS SSM agent service. This implies that an attacker has already achieved initial access on an active EC2 and is looking to add persistence.\r\n// Handling Guidance: Use the \"AccountDomain\" field to determine which AWS instance has been affected. Contact SecOps to properly contain the instance. Investigate any additional commands ran on the instance after the hi-jacking to determine the actions that the attacker took. \r\n// Query Modifications: \r\n//\r\n// Change notes\r\n// ------------\r\n// 10/12/2023 - Obadiah - Query created.\r\n//Possible AWS SSM Hijacking \r\nDeviceProcessEvents\r\n| where ProcessCommandLine contains \" -register -code\"\r\n| project TimeGenerated, AccountDomain, AccountName, ProcessCommandLine, AccountSid, ActionType, DeviceName, FolderPath, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessFolderPath, InitiatingProcessParentFileName, MachineGroup",
+                "queryFrequency": "PT12H",
+                "queryPeriod": "PT12H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CommandAndControl",
+                    "InitialAccess",
+                    "Execution"
+                ],
+                "techniques": [
+                    "T1133",
+                    "T1651"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "AccountDomain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

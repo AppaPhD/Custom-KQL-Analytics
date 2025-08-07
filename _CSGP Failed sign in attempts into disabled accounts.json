@@ -1,0 +1,79 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/774224f3-3561-4f10-afee-b4cb18460311')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/774224f3-3561-4f10-afee-b4cb18460311')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Failed sign in attempts into disabled accounts",
+                "description": "Identifies failed attempts to sign in to disabled accounts across multiple Azure Applications.\n\nDefault threshold for Azure Applications attempted to sign in to is 3.\n\nReferences: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\n\nAzure Sign-in Error 50057 - User account is disabled. The account has been disabled by an administrator.\n\nTuning and alert customization required.\n\n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Analytic Rule Name: Failed Sign In Attempts into Disabled Accounts\n//\n// Contributer: ?\n// Source: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\n// Reviewer:\n//\n// Description: Identifies failed attempts to sign in to disabled accounts across multiple Azure Applications. Default threshold for Azure Applications attempted to sign in to is 3.\n//\n// Handling guidance: \n//\n// Query: \nlet timeframe = 10d;\nlet threshold = 3;\nSigninLogs\n| where TimeGenerated >= ago(timeframe)\n| where ResultType == \"50057\"\n| where ResultDescription =~ \"User account is disabled. The account has been disabled by an administrator.\"\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count(), applicationCount = dcount(AppDisplayName), \napplicationSet = makeset(AppDisplayName) by UserPrincipalName, IPAddress\n| where applicationCount >= threshold\n| extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress\n//Filtered out teams/onedrive/office for phone auto-retries - change by jkesterson 4/19/21\n| where dynamic(['Microsoft Teams', 'OneDrive SyncEngine', 'Microsoft Office']) !contains applicationSet\n\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1078"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "75ea5c39-93e5-489b-b1e1-68fa6c9d2d04",
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

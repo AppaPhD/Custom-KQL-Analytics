@@ -1,0 +1,60 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/536fa85d-4129-461f-a208-6331c3d67f6c')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/536fa85d-4129-461f-a208-6331c3d67f6c')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Cobalt Strike Indicator: Suspicious Command Line Arguments",
+                "description": "Looking for command lina arguments via rundll32 commonly used by CobaltStrike or Empire.\n\nHandling Guidance: Evaluate the process and process lineage, and relevant command lines to determine if this is benign or likely malicious. ",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Diana Chong\r\n//Source: https://redcanary.com/blog/getsystem-offsec/\r\n//Reviewer: Grover Mewborn\r\n//Description: Looking for GetSystem command via rundll32 from CobaltStrike or Empire.\r\n//Handling Guidance: Evaluate the process and process lineage, and relevant command lines to determine if this is benign or likely malicious. \r\nDeviceProcessEvents\r\n| where InitiatingProcessFileName == \"rundll32.exe\"\r\n| where InitiatingProcessCommandLine contains \",a /p:\"\r\n| project TimeGenerated, DeviceName, AccountName, FileName, ProcessCommandLine, InitiatingProcessFileName, InitiatingProcessCommandLine, MachineGroup, ProcessIntegrityLevel",
+                "queryFrequency": "PT30M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1055"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

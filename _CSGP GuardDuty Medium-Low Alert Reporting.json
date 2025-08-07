@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/58ac72a5-d9be-444e-8998-4e3dd91189b5')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/58ac72a5-d9be-444e-8998-4e3dd91189b5')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: GuardDuty Medium-Low Alert Reporting",
+        "description": "This analytic runs every 8 hours and reports all the alerts that happened within a 8-hour window. The handler should navigate to the \"AWSGuardDuty Alert Triage v2\" workbook for a better understanding of the alerts. Report any significant findings in the closing comment. \n\nWorkbook: https://portal.azure.com/#view/AppInsightsExtension/UsageNotebookBlade/ComponentId/%2Fsubscriptions%2F9ffb3684-fd6f-44dc-a39f-f5359f6ead6a%2Fresourcegroups%2Fsentinel-rg%2Fproviders%2Fmicrosoft.operationalinsights%2Fworkspaces%2Fcsgp-sentinel/ResourceIds~/%5B%5D/Type/sentinel/ConfigurationId/%2Fsubscriptions%2F9ffb3684-fd6f-44dc-a39f-f5359f6ead6a%2Fresourcegroups%2Fsentinel-rg%2Fproviders%2Fmicrosoft.insights%2Fworkbooks%2F8e132983-91ef-437c-96a6-1e4809ef404e/ViewerMode~/null/Source/Sentinel/GalleryResourceType/Sentinel/WorkbookTemplateName/_DEV%3A%20AWSGuardDuty%20Findings%20v2",
+        "severity": "Informational",
+        "enabled": false,
+        "query": "// 04/09/25 - Nixy: Testing out creating incident for each shift at the moment; but we may end up deleting this analytic rule\r\nAWSGuardDuty_Base\r\n| where TimeCreated > ago (8h)\r\n| where Severity has \"Low\" or Severity has \"Medium\"\r\n| summarize AlertCount = count() by ActivityType, Title, Severity, AWSAccountName ",
+        "queryFrequency": "PT8H",
+        "queryPeriod": "PT8H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [],
+        "techniques": [],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": false,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT6H",
+            "matchingMethod": "AnyAlert",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Shift: GuardDuty Medium-Low Report (last 8 hours)",
+          "alertDescriptionFormat": "This rule runs during each online shift and compiles the alerts from the past 6 hours. Triaging person should navigate to the \"SOC Shift Hand-off\" Teams channel (to view the latest GD Hand Off) & this workbook to triage and review the findings and report any significant events in the closing comment: \n\nhttps://portal.azure.com/#view/AppInsightsExtension/UsageNotebookBlade/ComponentId/%2Fsubscriptions%2F9ffb3684-fd6f-44dc-a39f-f5359f6ead6a%2Fresourcegroups%2Fsentinel-rg%2Fproviders%2Fmicrosoft.operationalinsights%2Fworkspaces%2Fcsgp-sentinel/ResourceIds~/%5B%5D/Type/sentinel/ConfigurationId/%2Fsubscriptions%2F9ffb3684-fd6f-44dc-a39f-f5359f6ead6a%2Fresourcegroups%2Fsentinel-rg%2Fproviders%2Fmicrosoft.insights%2Fworkbooks%2F8e132983-91ef-437c-96a6-1e4809ef404e/ViewerMode~/null/Source/Sentinel/GalleryResourceType/Sentinel/WorkbookTemplateName/_DEV%3A%20AWSGuardDuty%20Findings%20v2",
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": null,
+        "sentinelEntitiesMappings": [{"columnName":"AlertCount"}],
+        "templateVersion": null
+      }
+    }
+  ]
+}

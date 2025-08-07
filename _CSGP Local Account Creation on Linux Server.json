@@ -1,0 +1,113 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/fb639f17-f756-4015-bb3c-62c325dd91d5')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/fb639f17-f756-4015-bb3c-62c325dd91d5')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Local Account Creation on Linux Server",
+                "description": "Alerts when a local account has been created on a Linux server using the \"useradd\" command. Pay attention to who the initiator is and review any additional flags used during creation.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: James Kim\r\n// Source: NA\r\n// References\r\n// Reviewer: Kevin Cleavinger\r\n//\r\n// Description: This rule detects when a local user account is created on a Linux server. \r\n// Handling Guidance: Contact the indvidiual who created the account and determine what the business purpose of the account is for. Is this intentional activity? Is there a ticket associated with this activity that can be referenced? Validate the flags used in the commandline to confirm any suspicious settings used.\r\n//\r\n// useradd command flag descriptions:\r\n// -c, --comment COMMENT: Specifies a comment associated with the user account. This typically contains additional information about the user.\r\n// -d, --home HOME_DIR: Sets the home directory for the new user account. By default, the home directory is created in the /home directory with the same name as the user.\r\n// -g, --gid GROUP: Specifies the initial login group for the user. The group can be specified by name or numeric group ID.\r\n// -m, --create-home: Creates the user's home directory if it doesn't already exist. By default, this option is enabled, and the home directory is created.\r\n// -s, --shell SHELL: Sets the login shell for the new user account. The shell can be specified by its full path or name.\r\n// -u, --uid UID: Specifies the numeric user ID (UID) for the new user account. This option is used to set a specific UID for the user.\r\n// -r, --system: Creates a system account. System accounts typically have lower UIDs and are used for system processes rather than regular users.\r\n// -e, --expiredate EXPIRE_DATE: Sets the expiration date for the user account. After this date, the account will be disabled.\r\n// -p, --password PASSWORD: Sets the encrypted password for the user account. Note that it's recommended to use the passwd command to set the password interactively for security reasons.\r\n//\r\n// Query:\r\n// Tune: kcleavinger added Username != \"appviewx\" per bp alert 08/03\r\nDeviceProcessEvents\r\n| where ProcessCommandLine has \"useradd\"\r\n| where isnotempty(InitiatingProcessFileName)\r\n| where MachineGroup <> 'AWS: EC2 Instances' //exclude EC2s?\r\n| where MachineGroup <> \"Workstations: Windows\" //this is specifically for linux devices\r\n| where InitiatingProcessAccountName <> \"root\"\r\n| where isnotempty(InitiatingProcessAccountName)\r\n| extend Username = extract(@'useradd\\s(?:-r\\s--no-log-init\\s)?(?:-m\\s)?(?:-u\\s\\d+\\s)?(?:-g\\s\\S+\\s)?(?:-d\\s\\S+\\s)?(?:-s\\s\\S+\\s)?(?:-c\\s[^\\s\\\"]+|\\\"[^\\\"]+\\\")?(?:-p\\s\\S+\\s)?(\\S+)', 1, ProcessCommandLine),\r\n         Comment = extract(@'-c\\s+(?:[^\\s\\\"]+|\\\"[^\\\"]+\\\")', 0, ProcessCommandLine),\r\n         HomeDir = extract(@'-d\\s+(?:[^\\s\\\"]+|\\\"[^\\\"]+\\\")', 0, ProcessCommandLine),\r\n         Group = extract(@'-g\\s+(?:[^\\s\\\"]+|\\\"[^\\\"]+\\\")', 0, ProcessCommandLine),\r\n         CreateHome = iif(ProcessCommandLine has \"-m\", true, false),\r\n         Shell = extract(@'-s\\s+(?:[^\\s\\\"]+|\\\"[^\\\"]+\\\")', 0, ProcessCommandLine),\r\n         UID = extract(@'-u\\s+(?:[^\\s\\\"]+|\\\"[^\\\"]+\\\")', 0, ProcessCommandLine),\r\n         SystemAccount = iif(ProcessCommandLine has \"-r\", true, false)\r\n| extend Username = iff(Username endswith '\"', trim_end('.*(\")', Username), Username)\r\n| where Username !startswith \"-\" and Username != \"appviewx\"\r\n| project TimeGenerated, DeviceName, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessCommandLine, ProcessCommandLine, MachineGroup, Username, Comment, HomeDir, Group, CreateHome, Shell, UID, SystemAccount",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1136"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [
+                            "Account",
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Local account created on Linux device by {{InitiatingProcessAccountName}} ",
+                    "alertDescriptionFormat": "{{InitiatingProcessAccountName}} created the local account, {{Username}} on {{DeviceName}}.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "Username": "Username",
+                    "Comment": "Comment",
+                    "HomeDir": "HomeDir",
+                    "Group": "Group",
+                    "CreateHome": "CreateHome",
+                    "Shell": "Shell",
+                    "UID": "UID",
+                    "SystemAccount": "SystemAccount"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Username"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

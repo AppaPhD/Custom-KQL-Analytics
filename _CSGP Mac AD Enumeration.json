@@ -1,0 +1,93 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a9672d06-c70d-4feb-8cb5-0635fd36dd88')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a9672d06-c70d-4feb-8cb5-0635fd36dd88')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Mac AD Enumeration",
+                "description": "Description: This query is designed to detect potential Active Directory (AD) enumeration activities on macOS devices, specifically using the dscl command. Active Directory enumeration involves querying AD for information about users, groups, and resources, which could indicate reconnaissance activity, often a precursor to lateral movement or privilege escalation in an attack.\n\nHandling Guidance: Evaluate the enumeration commands being run and what they are searching for; Look for unusual or unauthorized queries targeting sensitive AD information (e.g., users, groups, or privileges). Reach out to the user involved or look at related Jira tickets for confirmation on why they are running these commands. Validate the initiating process to determine if the user was running these commands manually or if it was part of another process. In the event of compromise, isolate the device and user account.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: James Kim\r\n// Reviewer:\r\n//\r\n// Description: This query is designed to detect potential Active Directory (AD) enumeration activities on macOS devices, specifically using the dscl command. Active Directory enumeration involves querying AD for information about users, groups, and resources, which could indicate reconnaissance activity, often a precursor to lateral movement or privilege escalation in an attack.\r\n// Handling Guidance: Evaluate the enumeration commands being run and what they are searching for; Look for unusual or unauthorized queries targeting sensitive AD information (e.g., users, groups, or privileges). Reach out to the user involved or look at related Jira tickets for confirmation on why they are running these commands. Validate the initiating process to determine if the user was running these commands manually or if it was part of another process. In the event of compromise, isolate the device and user account.\r\n//\r\n// Change notes\r\n// ------------\r\n// 11/21/24 James Kim - Initial version\r\nDeviceProcessEvents\r\n| where (ProcessCommandLine has 'dscl' and ProcessCommandLine has 'Active Directory') or (InitiatingProcessCommandLine has 'dscl' and InitiatingProcessCommandLine has 'Active Directory')\r\n| summarize Enumerations = make_set(ProcessCommandLine) by bin(TimeGenerated, 1h), DeviceName, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessFolderPath, FileName\r\n| extend ['Enumerations ran'] = array_length(Enumerations)\r\n| project-reorder TimeGenerated, DeviceName, InitiatingProcessAccountName, FileName, InitiatingProcessFileName, InitiatingProcessFolderPath, ['Enumerations ran'], Enumerations",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1087",
+                    "T1482"
+                ],
+                "subTechniques": [
+                    "T1087.002"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

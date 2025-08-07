@@ -1,0 +1,118 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1fde6fc4-c4f5-460b-aa95-6a86839120d4')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1fde6fc4-c4f5-460b-aa95-6a86839120d4')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Canarytoken Triggered",
+                "description": "Triggers when a document containing a Canarytoken is accessed, indicating potential unauthorized activity or document exfiltration.\nHandling Guidance:\n1. Check which device and user accessed the document. (If this information is not available, search for network connections to the Thinkst Canarytoken host URL: \"8eaec218f40c.o3n.io\" and \"app-net.costar.com\"\n2. Review Reminder field to see where the document was stored.\n3. Look for any related alerts indicating potential exfiltration or compromise.\n4. If unauthorized access is suspected, escalate and initiate containment steps.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Adrian Shina, Lucas Trainer\r\n// Reviewer: Lucas Trainer\r\n// Reference: \r\n//\r\n// Description: This alert triggers when a canarytoken has been accessed. Handlers will seek to identify if the canarytoken has been accessed via a CoStar-owned device, or a non-CoStar device. If the device is owned by CoStar, review associated DeviceNetworkEvents and DeviceFileEvents to discover the context for how and why the CanaryToken has been accessed.\r\n// Handling Guidance:\r\n// 1. Check which device and user accessed the document. (If this information is not available, search for network connections to the Thinkst Canarytoken host URL: 8eaec218f40c.o3n.io) -- If still blank, that means the canarytoken was accessed via a non-CoStar device.\r\n// 2. Review Reminder field to see where the document was stored.\r\n// 3. Look for any related alerts indicating potential exfiltration or compromise.\r\n// 4. If unauthorized access is suspected, escalate and initiate containment steps.\r\n//\r\n// Change notes\r\n// ------------\r\nlet RemoteConnects = DeviceNetworkEvents\r\n| where RemoteUrl has \"8eaec218f40c.o3n.io\" or RemoteUrl has \"app-net.costar.com\"\r\n| extend CanaryToken = extract(@\"\\/([^\\/]+)\\/logo\\.gif$\", 1, RemoteUrl)\r\n| where isnotempty(CanaryToken);\r\nThinkstCanary_CL\r\n| where Flock_s <> \"Entra Deception - AE\"\r\n| join kind=leftouter RemoteConnects on $left.Token_s == $right.CanaryToken\r\n| extend TimeGenerated1 = coalesce(TimeGenerated1, datetime(null))\r\n| project TimeGenerated, TimeGenerated1, SuspectDevice=DeviceName, SuspectAccount=InitiatingProcessAccountName, CanaryToken, Reminder_s, Description_s, Flock_s, SourceIP, AdditionalDetails_s, DeviceId, InitiatingProcessAccountUpn, InitiatingProcessFileName, InitiatingProcessCommandLine\r\n| where isnull(TimeGenerated1) or abs(TimeGenerated - TimeGenerated1) <= 10m //Look for events where the devicenetworkevent and canarytoken trigger occur within 10 minutes of eachother",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CommandAndControl",
+                    "Exfiltration",
+                    "Execution",
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1071",
+                    "T1567",
+                    "T1204",
+                    "T1083",
+                    "T1041"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDescriptionFormat": "Triggers when a document containing a Canarytoken is accessed, indicating potential unauthorized activity or document exfiltration.\nHandling Guidance:\n1. Check which device and user accessed the document. (If this information is not available, search for network connections to the Thinkst Canarytoken host URL: 8eaec218f40c.o3n.io)\n2. Review Reminder field to see where the document was stored.\n3. Look for any related alerts indicating potential exfiltration or compromise.\n4. If unauthorized access is suspected, escalate and initiate containment steps.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "SuspectAccount"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "SuspectDevice"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Reminder_s"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "InitiatingProcessCommandLine"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

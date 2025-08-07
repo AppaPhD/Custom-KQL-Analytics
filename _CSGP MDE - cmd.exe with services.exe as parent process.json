@@ -1,0 +1,77 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5fe80087-43f8-4e44-b0d2-4e4bdaf0b610')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5fe80087-43f8-4e44-b0d2-4e4bdaf0b610')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: MDE - cmd.exe with services.exe as parent process",
+                "description": "Returns all processes named cmd.exe that have services.exe as a parent process. \n\nHandling guidance: Determine if the activity is legitimate by looking at the host name and the account name.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Analytic Rule Name: _DEV: cmd.exe with services.exe as parent process\r\n//\r\n// Author: Mohamed Elgendy\r\n// Source: https://redcanary.com/blog/blue-mockingbird-cryptominer/, https://car.mitre.org/analytics/CAR-2014-05-002/\r\n// Reviewer:\r\n//\r\n// Description: Returns all processes named cmd.exe that have services.exe as a parent process.\r\n//\r\n// Windows runs the Service Control Manager (SCM) within the process services.exe. Windows launches services as independent \r\n// processes or DLL loads within a svchost.exe group. To be a legitimate service, a process (or DLL) must have the appropriate \r\n// service entry point SvcMain. If an application does not have the entry point, then it will timeout (default is 30 seconds)\r\n// and the process will be killed. Services are a convenient way for an adversary to gain Persistence and Privilege Escalation.\r\n//\r\n// Handling guidance: Determine if the activity is legitimate by looking at the host name and the account name. \r\n// \r\n// MITRE ATT&CK Reference: https://attack.mitre.org/techniques/T1543/\r\n// Change notes\r\n// ------------\r\n// 06/07/23 Obadiah Bridges - updated boilerplate. promoted to CSGP. \r\n//\r\n// Query \r\nDeviceProcessEvents\r\n| where FileName == \"cmd.exe\" and InitiatingProcessFileName == \"services.exe\"\r\n| extend Hostname = trim_end(@\"\\..+\",DeviceName)",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation",
+                    "Persistence",
+                    "Execution"
+                ],
+                "techniques": [
+                    "T1543",
+                    "T1059"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "cmd.exe with services.exe as parent process, {{Hostname}}",
+                    "alertDescriptionFormat": "Triage the incident according to our daily SOC operation and escalate to the Endpoint Security Team if needed. \n\nNote: This is part of a detection for Blue Mockingbird that includes several alerts.\n\nDescription: Windows runs the Service Control Manager (SCM) within the process services.exe. Windows launches services as independent processes or DLL loads within a svchost.exe group. To be a legitimate service, a process (or DLL) must have the appropriate service entry point SvcMain. If an application does not have the entry point, then it will timeout (default is 30 seconds) and the process will be killed. Services are a convenient way for an adversary to gain Persistence and Privilege Escalation.\n\nInitiatingProcessParentFileName: {{InitiatingProcessParentFileName}}\n\nProcessCommandLine: {{ProcessCommandLine}}",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "Hostname"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

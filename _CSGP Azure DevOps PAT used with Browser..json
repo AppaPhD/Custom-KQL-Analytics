@@ -1,0 +1,81 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/71022aad-214b-40e5-8f62-dbd092f45712')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/71022aad-214b-40e5-8f62-dbd092f45712')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Azure DevOps PAT used with Browser.",
+                "description": "Personal Access Tokens (PATs) are used as an alternate password to authenticate into Azure DevOps. PATs are intended for programmatic access use in code or applications. This can be prone to attacker theft if not adequately secured. This query looks for the use of a PAT in authentication but from a User Agent indicating a browser. This should not be normal activity and could be an indicator of an attacker using a stolen PAT.\n\nHandling Guidance:\nInvestigate the Source: Identify the user and IP address associated with the PAT usage.\nVerify Legitimacy: Contact the user to confirm if they were using the PAT intentionally via a browser.\nRevoke PAT: If unauthorized use is confirmed, immediately revoke the PAT.\nContainment:\n\nMonitor Activity: Increase monitoring of the affected account for any further suspicious activity.\nUpdate Credentials: Advise the user to update their credentials and generate a new PAT if necessary.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Obadiah \n//\n// Reviewer: \n//\n// Reference: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/AzureDevOpsAuditing/Analytic%20Rules/ADOPATUsedWithBrowser.yaml\n//\n// Description: Personal Access Tokens (PATs) are used as an alternate password to authenticate into Azure DevOps. PATs are intended for programmatic access use in code or applications. This can be prone to attacker theft if not adequately secured. This query looks for the use of a PAT in authentication but from a User Agent indicating a browser. This should not be normal activity and could be an indicator of an attacker using a stolen PAT.\n//\n// Handling Guidance: \n//Investigate the Source: Identify the user and IP address associated with the PAT usage.\n//Verify Legitimacy: Contact the user to confirm if they were using the PAT intentionally via a browser.\n//Revoke PAT: If unauthorized use is confirmed, immediately revoke the PAT.\n//Containment:\n//\n// Monitor Activity: Increase monitoring of the affected account for any further suspicious activity.\n// Update Credentials: Advise the user to update their credentials and generate a new PAT if necessary.\n//\n// Change notes\n// ------------\n// 05/02/23 Obadiah Bridges - Found & added reference, added boilerplate, added description, moved to production. \n// Query\nAzureDevOpsAuditing\n| where AuthenticationMechanism startswith \"PAT\"\n// Look for useragents that include a redenring engine\n| where UserAgent has_any (\"Gecko\", \"WebKit\", \"Presto\", \"Trident\", \"EdgeHTML\", \"Blink\")\n| extend TimeGenerated, ActorUPN, IpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1528"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "5f0d80db-3415-4265-9d52-8466b7372e3a",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "ActorUPN"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        }
+    ]
+}

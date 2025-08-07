@@ -1,0 +1,96 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/caaa770f-208f-4d29-98a2-797d60bedbcf')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/caaa770f-208f-4d29-98a2-797d60bedbcf')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Endpoint: Persistence - Batch file created in startup folder",
+                "description": "Adversaries can achieve persistence by adding a batch file to a startup folder.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Adrian\r\n// Reviewer: Lucas\r\n// Reference:\r\n//\r\n// Description: Adversaries can achieve persistence by adding a batch file to a startup folder.\r\n// Handling Guidance: Look for InitiatingProcessCommandLine to see what initiated the event, FileName, and look for Job Title (is this person likely to be running this?). Look at device events for activity around this timeline.\r\n//\r\n// Change notes\r\n// ------------\r\n// 04/08/24 Adrian - Initial version\r\n// 10/14/24 Wajahat - Removed hardcoded Time frame and cleaned up the code\r\n// 3/7/25 - Adrian - Excluded setuphost.exe InitiatingProcessFile\r\nlet startup_folders = dynamic([\"\\\\ProgramData\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\StartUp\", \"\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\\"]);\r\nlet excluded_InitiatingProcessFiles = dynamic([\"setuphost.exe\"]); // Windows process that helps install Windows updates and upgrades\r\nDeviceFileEvents\r\n| where FolderPath has_any (startup_folders)\r\n| where FileName has \".bat\"\r\n| where not (InitiatingProcessFileName has_any (excluded_InitiatingProcessFiles)) or ActionType == \"FileModified\"\r\n| project TimeGenerated, ActionType, DeviceName, FileName, FolderPath, PreviousFileName, PreviousFolderPath, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, InitiatingProcessFileName, InitiatingProcessFolderPath, InitiatingProcessParentFileName",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T0889"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Persistence - Batch file created in startup folder",
+                    "alertDescriptionFormat": "Description: Adversaries can achieve persistence by adding a batch file to a startup folder.\n\nHandling Guidance: Look for InitiatingProcessCommandLine to see what initiated the event, FileName, and look for Job Title (is this person likely to be running this?). Look at device events for activity around this timeline.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountUpn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FolderPath"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

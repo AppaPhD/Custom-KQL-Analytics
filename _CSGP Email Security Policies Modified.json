@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/64a8b273-723d-4251-a5e1-0c1617e6c165')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/64a8b273-723d-4251-a5e1-0c1617e6c165')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT5M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Low",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "User"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Email: {{User}} modified email security policy - {{Policy}}",
+          "alertDescriptionFormat": "This alert indicates that someone change the Exchange Admin Policy",
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "Execution",
+          "InitialAccess"
+        ],
+        "techniques": [
+          "T1204",
+          "T1566"
+        ],
+        "subTechniques": [],
+        "displayName": "_CSGP: Email Security Policies Modified",
+        "enabled": true,
+        "description": "Description: This alert indicates that some change, addition, or deletion has been made to one of the following policies related to E-mail security: Anti-spam, Anti-phishing, Anti-malware, Safe Links, or Safe Attachments\nHandling Guidance: \n1. Determine the user who made the modification - does their role line up with the task they performed? (e.g. email security team, systems team)\n2. Are there any Jira tickets documenting the change? \n3. If the modification seems abnormal, reach out to user to confirm activity. \n4. If no valid justification exists or the user denies the activity, escalate to senior incident response and consider containment actions.",
+        "alertRuleTemplateName": null,
+        "query": "// Contributor: Lucas, Wajahat\n// Reviewer:\n// Reference:\n//\n// Description: Description: This alert indicates that some change, addition, or deletion has been made to E-mail security policies.\n// Handling Guidance: \n// 1. Determine the user who made the modification - does their role line up with the task they performed? (e.g. email security team, systems team)\n// 2. Are there any Jira tickets documenting the change? \n// 3. If the modification seems abnormal, reach out to user to confirm activity. \n// 4. If no valid justification exists or the user denies the activity, escalate to senior incident response and consider containment actions.\nOfficeActivity\n| where RecordType has \"ExchangeAdmin\"\n| where (Operation contains \"policy\" or Operation has \"RemoteDomain\") and (Operation !has \"ConditionalAccessPolicy\" and Operation != \"Set-RetentionPolicyTag\")\n| where not(UserKey in(\"NT AUTHORITY\\\\SYSTEM (Microsoft.Exchange.AdminApi.NetCore)\", \"NT AUTHORITY\\\\SYSTEM (Microsoft.Exchange.ServiceHost)\"))\n| project TimeGenerated, RecordType, Operation, User = UserKey, UserType, Policy = OfficeObjectId, ClientIP, Parameters, ExternalAccess"
+      }
+    }
+  ]
+}

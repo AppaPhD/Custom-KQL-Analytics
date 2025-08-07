@@ -1,0 +1,93 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1324ab10-3ae8-413a-9494-015638bd4458')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1324ab10-3ae8-413a-9494-015638bd4458')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Interactive STS refresh token modifications",
+                "description": "This will show Active Directory Security Token Service (STS) refresh token modifications by Service Principals and Applications other than DirectorySync. Refresh tokens are used to validate identification and obtain access tokens.\nThis event is most often generated when legitimate administrators troubleshoot frequent AAD user sign-ins but may also be generated as a result of malicious token extensions. \n- Confirm that the activity is related to an administrator legitimately modifying STS refresh tokens \n- check the new token validation time period for high values.\n\nFor in-depth documentation of AAD Security Tokens, see https://docs.microsoft.com/azure/active-directory/develop/security-tokens.\nFor further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.",
+                "severity": "Informational",
+                "enabled": false,
+                "query": "let auditLookback = 1d;\nAuditLogs\n| where TimeGenerated > ago(auditLookback)\n| where OperationName has 'StsRefreshTokenValidFrom'\n| where TargetResources[0].modifiedProperties != '[]'\n| where TargetResources[0].modifiedProperties !has 'DirectorySync'\n| extend TargetResourcesModProps = TargetResources[0].modifiedProperties\n| mv-expand TargetResourcesModProps\n| where tostring(TargetResourcesModProps.displayName) =~ 'StsRefreshTokensValidFrom'\n| extend InitiatingUserOrApp = iff(isnotempty(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))\n| where InitiatingUserOrApp !in ('Microsoft Cloud App Security')\n| extend targetUserOrApp = TargetResources[0].userPrincipalName\n| extend eventName = tostring(TargetResourcesModProps.displayName)\n| extend oldStsRefreshValidFrom = todatetime(parse_json(tostring(TargetResourcesModProps.oldValue))[0])\n| extend newStsRefreshValidFrom = todatetime(parse_json(tostring(TargetResourcesModProps.newValue))[0])\n| extend tokenMinutesAdded = datetime_diff('minute',newStsRefreshValidFrom,oldStsRefreshValidFrom)\n| extend tokenMinutesRemaining = datetime_diff('minute',TimeGenerated,newStsRefreshValidFrom)\n| project-reorder Result, AADOperationType\n| extend InitiatingIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))\n| extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingUserOrApp, IPCustomEntity = InitiatingIpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess",
+                    "Persistence"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": "4696e072-aca8-4a4f-bf05-89fddc5ac3c9",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "P1D",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "InitiatingUserOrApp"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "targetUserOrApp"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

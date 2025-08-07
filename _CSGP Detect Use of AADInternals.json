@@ -1,0 +1,91 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6f1b7e9e-7585-4b64-aef7-323bd67fa11d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6f1b7e9e-7585-4b64-aef7-323bd67fa11d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Detect Use of AADInternals",
+                "description": "Know as the toolkit for AD Hackers.  AAD Internals is a tool than can be used to circumvent in place security controls including, Teams, Device Compliance, Joining a Device to Azure AD, Export AD F5 certificates, Spoofing Azure AD sign-in logs, obtains the Primary Refresh Token, and Exfiltrating NTHashes. https://aadinternals.com/\n\nHandling Guidance:\n1. Check the device and make sure that the sign-ons, if there is a sign-on that looks unfamiliar, reach out to a senior\n2. Reach out to the device owner to verify that the imageload event was expected (usually not)\n3. Isolate device is user does not confirm and the sign in logs for the user are not from the usual location and device ID.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: Anthony Edelstein\r\n// Reviewer: Samuel Liu\r\n// Reference:https://twitter.com/ellishlomo/status/1665227218383937536\r\n//\r\n// Description: \r\n// Handling Guidance: \r\n//\r\n// Change notes\r\n// ------------\r\n// 4/25/2024 -- Enabled- Anthony Edelstein\r\nlet AADINTFiles = dynamic([\r\n\"BouncyCastle.Crypto.dll\",\r\n\"Win32Ntv.dll\",\r\n\"AADInternals.psd1\",\r\n\"AADInternals.psm1\"\r\n]);\r\nDeviceImageLoadEvents\r\n| where FileName has_any (AADINTFiles)\r\n| where FolderPath contains \"AADInternals\"",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution",
+                    "Evasion"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Indicator of Hacking Tools on {{{InitiatingProcessAccountName}} ",
+                    "alertDescriptionFormat": "Contact the user {{InitiatingProcessAccountName}} and determine if they ran the command or if there is other activity that indicates someone else is on the device or other indicators of compromise.  Also check the CommandLine output to see what action was taken i.e. \"\"Certificates retrieved successfully\". ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "InitiatingProcessCommandLine"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

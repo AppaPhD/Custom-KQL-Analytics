@@ -1,0 +1,83 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a984b7fd-6043-4a49-8c96-b69d783229fe')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a984b7fd-6043-4a49-8c96-b69d783229fe')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Local Account Creation on one endpoint",
+                "description": "Alerts when a local account has been created on an endpoint. \nCheck the VPSP queue for any related tickets: https://servicedesk.costargroup.com/projects/VPSP/queues",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Obadiah Bridges\n// Source: NA\n//References\n// Reviewer: Mohamed Elgendy \n//\n// Description: This rule detects when a local user account is created on an endpoint. \n// Handling Guidance: Contact the indvidiual who created the account and determine what the business purpose of the account is for. Is this intentional activity? Is there a ticket associated with this activity that can be referenced?\n//\n// Query:\n// For this query we are focused on Local Accounts created on all endpoints except for domain controllers.\n//\n// Change log:\n// 08/26/2024 - Wajahat Malik - Change the logic and description of the alert to include all endpoints except for domain controllers prior to this the alert was create only for servers.\n// 10/04/2024 - Evgeniy Cralev - Excluded \"wlapspending\" accounts for testing that Jarad is performing.\n// 3/6/24 - Renee Sen - Excluded the account name \"postgres\" as a local account is expected with this account\nlet removedAccountNames_ = dynamic([\"psm\", \"consulclient\", \"default\", \"ddagent\", \"ddagentuser\", \"lenovo\", \"devv\", \"defaultuser100000\", \"defaultuser100001\", \"clitest2\", \"bmercedes\", \"cliusr\", \"wsiaccount\", \"dbaadmin\", \"defaultuser1\", \"afriend\", \"bmercedes2\", \"ssm-user\", \"postgres\"]);//added cli, wsiaccount, defaultuser1 and dbaadmin Account name to this list // kahmadjan added bmercedes2, afriend, & ssm-user to exclusions\nlet removed_domain_controllers = _GetWatchlist(\"dcs_watchlist\")\n    | project DeviceName;\nDeviceEvents \n| where ActionType == \"UserAccountCreated\" and DeviceName !startswith \"ec2amaz\"\n| where not(AccountName has_any (removedAccountNames_))\n| where not(DeviceName in (removed_domain_controllers))\n| where DeviceName !startswith \"hn50sql\" and AccountName !startswith \"svchn50sql\"//exclude for str sql server account creation\n| where DeviceName !has \"appsdvm\" and AccountName !startswith \"wdeploy\" //exclusion for wdeploy account creation\n| where AccountName !startswith \"wlapspending\" // excluding Jarad LAPS testing\n| project\n    TimeGenerated,\n    DeviceName,\n    InitiatingProcessAccountName,\n    AccountDomain,\n    AccountName,\n    ActionType,\n    MachineGroup",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1136"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Local Account Creation",
+                    "alertDescriptionFormat": "Alert Name: Local Account Creation on one endpoint\n\nDescription: This rule detects when a local user account is created on an endpoint. \n\nHandling Guidance: Contact the individual who created the account and determine what the business purpose of the account is for. Is this intentional activity? Is there a ticket associated with this activity that can be referenced?",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

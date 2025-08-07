@@ -1,0 +1,54 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b845730f-cdae-4de6-9cab-4549f1357b16')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b845730f-cdae-4de6-9cab-4549f1357b16')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "NRT",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Changes To Sensitive AD Group: CHRO Critical Docs",
+                "description": "This checks to see when users are added to this AD Group: CHRO Critical Docs and promoted to owner.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Kamran Ahmadjan & James Kim\r\n// Reviewer: \r\n// Reference:\r\n//\r\n// Description: This will check to see any modifications in the group name \"CHROCriticalDocs\"\r\n// Handling Guidance:Emails of this report will be sent to \"Anna Montgomery\"\r\n//\r\n// Change notes\r\n// ------------\r\nAuditLogs\r\n| mv-expand TargetResources\r\n| where OperationName == \"Add member to group\" or OperationName == \"Add owner to group\"\r\n| where TargetResources has \"CHRO Critical Docs\"\r\n    or TargetResources has \"CHROCriticalDocs\"\r\n| extend GroupName = parse_json(tostring(parse_json(tostring(TargetResources.modifiedProperties))[1].newValue))  \r\n| extend TargetUser =  TargetResources.userPrincipalName\r\n| extend Inititator =  parse_json(tostring(InitiatedBy.user)).userPrincipalName\r\n| extend LocalTime = datetime_add('hour', -5, TimeGenerated)\r\n| extend Description = strcat(format_datetime(LocalTime, \"MM/dd/yyyy HH:mm\"), \": \", Inititator, \" performed the operation: \", OperationName, \" on the user: \", TargetUser, \" for the group: \", GroupName)\r\n| project TimeGenerated, GroupName, OperationName, TargetUser, Inititator, Description",
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDescriptionFormat": "{{Description}} ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

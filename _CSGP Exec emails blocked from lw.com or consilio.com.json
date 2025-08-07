@@ -1,0 +1,60 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f3df7f32-9b42-441c-a847-06ad30872b4f')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f3df7f32-9b42-441c-a847-06ad30872b4f')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Exec emails blocked from lw.com or consilio.com",
+                "description": "PLEASE DO NOT TAKE ANY ACTION IF THIS ALERT TRIGGERS. THIS IS TESTING.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "EmailEvents\r\n| where SenderFromDomain in (\"consilio.com\", \"lw.com\")\r\n| where DeliveryAction != \"Delivered\"\r\n| where DeliveryLocation != \"Failed\"\r\n| where DeliveryLocation != \"Deleted items\"\r\n| where RecipientEmailAddress != \"jkoonce@costar.com\"\r\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": [
+                    {
+                        "columnName": "SenderFromAddress"
+                    }
+                ],
+                "templateVersion": null
+            }
+        }
+    ]
+}

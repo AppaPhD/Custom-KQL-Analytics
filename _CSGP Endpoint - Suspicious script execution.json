@@ -1,0 +1,89 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d403308f-ead6-4389-8ea1-194fc0dd49a1')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d403308f-ead6-4389-8ea1-194fc0dd49a1')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Endpoint - Suspicious script execution",
+                "description": "https://redcanary.com/threat-detection-report/techniques/mshta/\nhttps://redcanary.com/blog/microsoft-html-application-hta-abuse-part-deux/ \n",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Suspicious MSHTA Execution\n//\n//Contributor: Lucas Trainer\n//References: https://redcanary.com/threat-detection-report/techniques/mshta/ \n//Reviewer: E.J. Davis\n//Description: Adversaries may abuse mshta.exe to proxy execution of malicious .hta files and Javascript or VBScript through a trusted Windows utility.\n//\n//Handling guidance: 1- Determine which resources are affected by the suspicious MSHTA execution. 2- Collect as much information , Reach out to the user to understand the nature of the attack and identify potential indicators of compromise. 3-  If necessary, isolate the affected resources to prevent further damage or compromise. 4- Based on your analysis, take appropriate steps to mitigate the threat.\t\n//\n// Change notes\n// ------------\n// 4/25/2023 Obadiah Bridges - Updated boilerplate and moved to production. \n//\n//\n//Query:\nDeviceProcessEvents\n| where ActionType == \"ProcessCreated\"\n| where InitiatingProcessFolderPath == \"c:\\\\windows\\\\explorer.exe\"\n| where FileName == \"mshta.exe\"\n| where not(ProcessCommandLine contains \"\\\\usweb\\\\itops\\\\SysScripts\\\\\")\n| where not(ProcessCommandLine contains \"\\\\CSGP.Systems.Scripts\\\\ActiveDirectory\\\\\")\n| where ProcessCommandLine !contains \"MemberOf_Report_V2.hta\"\n| where MachineGroup !contains \"Red team\"\n| where not(AccountName in~ (\"administrator\",\"bmercedes\") and ProcessCommandLine contains \"\\\\Local\\\\Temp\\\\DeploymentScripts\\\\Wizard.hta\") \n//Exception for an .hta file that is dropped by rufus\n//Write description details for alert\n| extend Description_ = strcat(\n    \"User: \", InitiatingProcessAccountName, \"\\n\",\n        \"File Name: \", FileName, \"\\n\",\n    \"Parent File Name: \", InitiatingProcessParentFileName, \"\\n\",\n    \"Folder Path: \", FolderPath, \"\\n\",\n    \"Initiating Process: \", InitiatingProcessFolderPath,\"\\n\",\n    \"Time Generated (UTC) \", TimeGenerated \n    )\n| extend ProcessCommandLine_ = strcat(\n    \"Process Command Line: \", ProcessCommandLine\n    )\n| extend HostName_ = toupper(trim_end(@\"\\..+\", DeviceName))\n| extend HostDomain_ = extract(@\"[a-zA-Z]+\\.[a-zA-Z]+\\.[a-zA-Z]+\",0, DeviceName)\n| project\n    TimeGenerated,\n    AccountName,\n    ProcessCommandLine,\n    InitiatingProcessParentFileName,\n    FileName,\n    DeviceName,\n    MachineGroup,\n    Description_,\n    ProcessCommandLine_,\n    HostName_,\n    HostDomain_",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution",
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1566"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName_"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

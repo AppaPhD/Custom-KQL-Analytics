@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c7c02004-3b49-46a2-bde7-ec80f2f0c73d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c7c02004-3b49-46a2-bde7-ec80f2f0c73d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: Email Exchange Transport Rule Created, Modified or Deleted",
+        "description": "This alert will trigger when a new transport rule is created, modified or deleted. \n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+        "severity": "Low",
+        "enabled": true,
+        "query": "OfficeActivity\n| where Operation has \"TransportRule\"\n| extend Actor = UserId\n| extend TransportRuleSettings = todynamic(Parameters)\n| parse TransportRuleSettings with * '\"Name\":\"Name\",\"Value\":\"' TransportRuleName '\"' *\n| extend TransportRule = iff(isempty(TransportRuleName), OfficeObjectId, TransportRuleName)\n| project TimeGenerated, Actor, Operation, TransportRule,TransportRuleSettings, ClientIP, ResultReasonType, ResultStatus, ExternalAccess",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": ["ResourceDevelopment","Persistence"],
+        "techniques": ["T1586","T1588","T1098"],
+        "subTechniques": ["T1586.002"],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": null,
+        "customDetails": {},
+        "entityMappings": [{"entityType":"Account","fieldMappings":[{"identifier":"Name","columnName":"Actor"}]},{"entityType":"IP","fieldMappings":[{"identifier":"Address","columnName":"ClientIP"}]}],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

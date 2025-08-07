@@ -1,0 +1,92 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c7668850-9fa9-4af6-b44c-d84ec3efe8dd')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c7668850-9fa9-4af6-b44c-d84ec3efe8dd')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Exchange - Mailbox access removed or granted for non-owner",
+                "description": "Description: This is a follow up detect when full mailbox access is removed or granted for a user other than the mailbox owner. This alert provides additional context when investigating mailbox permission additions. \n\nHandling guidance: Confirm with IAM team that this is an expected and permitted activity - especially if the mailbox belongs to an executive.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: Lucas Trainer\r\n// Reviewer: James Kim\r\n// Reference: https://github.com/reprise99/Sentinel-Queries/blob/main/Office%20365/OfficeActivity-DetectFullMailboxAccess.kql \r\n//\r\n// Description: Detect when full mailbox access is granted to a user other than the mailbox owner\r\n// Join with IdentityInfo table to exclude Resource Accounts\r\n// Handling guidance: Confirm with IAM team that this is an expected and permitted activity - especially if the mailbox belongs to an executive. \r\n//\r\n// Change notes\r\n// ------------\r\n// 05/15/23 James Kim - Promoted to CSGP\r\n// 10/19/23 James Kim - Updating entities for clarity\r\n// 04/09/25 Nixy Camacho - Combined \"access granted\" and this \"access removed\" alert\r\n// \r\nlet ExceptedMailboxes_ = dynamic([\"esign clien1\", \"BizBuySell ClientServices\", \"pricinguk\", \"PowerBrokers\"]);\r\nlet ExceptedUsers_ = dynamic([\"svcO365Scripter@costar.com\", \"NT AUTHORITY\\\\SYSTEM (Microsoft.Exchange.Servicehost)\"]);\r\nlet IdentityInfo_ = (\r\n    IdentityInfo\r\n    | where TimeGenerated > ago(8d)\r\n    | distinct AccountName, AccountUPN, OnPremisesDistinguishedName);\r\nOfficeActivity\r\n| where TimeGenerated > ago(4h)\r\n| where RecordType == \"ExchangeAdmin\"\r\n| where Operation in (\"Add-MailboxPermission\",\"Remove-MailboxPermission\") \r\n| where not(UserId has_any (ExceptedUsers_))\r\n| where not(OfficeObjectId has_any (ExceptedMailboxes_))\r\n| parse-where Parameters with * 'Identity\",\"Value\":\"' TargetMailbox '\"' *\r\n| parse-where Parameters with * 'User\",\"Value\":\"' UserGivenAccess '\"' *\r\n| parse-where Parameters with * 'AccessRights\",\"Value\":\"' AccessRights '\"' *\r\n//| where Actor != \"NT AUTHORITY\\\\SYSTEM (Microsoft.Exchange.Servicehost)\"\r\n//| where Actor <> \"svcO365Scripter@costar.com\"\r\n| order by TimeGenerated desc \r\n//| summarize count() by TargetMailbox, TargetMailboxDisplayName\r\n| join kind=inner IdentityInfo_ on $left.OfficeObjectId == $right.AccountName\r\n| where OnPremisesDistinguishedName !contains \"OU=ResourceAccounts\"\r\n| extend Description_ = strcat(Operation, \": \", AccessRights, \" to \", TargetMailbox, \" has been executed for \", UserGivenAccess, \". This action was performed by: \", UserId, \"at \", TimeGenerated, \".\")\r\n| where UserGivenAccess <> \"conferenceroomadmins@costar.com\" // exclusion added from the \"access granted\" rule 4/9/25\r\n| project\r\n    TimeGenerated,\r\n    Operation,\r\n    Description_,\r\n    ActorGrantingAccess=UserId,\r\n    UserGivenAccess,\r\n    TargetMailbox,\r\n    TargetMailboxDisplayName=OfficeObjectId,\r\n    AccessRights,\r\n    //Parameters, //Full JSON parameters from which the actor and targetedmailbox are derived \r\n    ClientIP,\r\n    ExternalAccess,\r\n    OnPremisesDistinguishedName\r\n| order by TimeGenerated desc",
+                "queryFrequency": "PT4H",
+                "queryPeriod": "PT4H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Collection"
+                ],
+                "techniques": [
+                    "T1114"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Exchange - Mailbox access removed or granted for non-owner",
+                    "alertDescriptionFormat": "{{Description_}}<br>\nOperation: {{Operation}} <br>\n\n\nHandling guidance: Confirm with IAM team that this is an expected and permitted activity - especially if the mailbox belongs to an executive. ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Mailbox",
+                        "fieldMappings": [
+                            {
+                                "identifier": "MailboxPrimaryAddress",
+                                "columnName": "TargetMailboxDisplayName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserGivenAccess"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "ActorGrantingAccess"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

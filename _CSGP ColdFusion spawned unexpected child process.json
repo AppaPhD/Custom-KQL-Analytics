@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/67f30251-bb0b-41bd-b818-cc3b61d23259')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/67f30251-bb0b-41bd-b818-cc3b61d23259')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: ColdFusion spawned unexpected child process",
+        "description": "Detects ColdFusion spawning subprocesses that are not in a list of previously observed process names. \n\nHandling guidance: Review the ProcessCommandLine and the FileName of the spawned process. Look out for \"cmd.exe\". If the subprocess is expected, add it to the list in this analytic rule.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "// Contributor: Gunther Abbot\n// Reviewer: \n// Reference:\n//\n// Description: Detects ColdFusion spawning subprocesses that are not in a list of previously observed process names. \n// Handling guidance: Review the ProcessCommandLine and the FileName of the spawned process. Look out for \"cmd.exe\". If the subprocess is expected, add it to the list in this analytic rule.\n//\n// Date     | Author             | Change notes\n// ---------------------------------------------------\n// 04/11/23 | gabbot             | Initial version\n// 04/12/23 | gabbot             | Slimmed down exclusion list\n// 7/31/24  | aedelstein         | alert need tuning. ffmpeg.exe was triggering alert and it is a command line utility used in Coldfusion to compress videos. Added ColdFusion2023 as expected for ProcessCommandLine.  \n//\nlet coldfusion_procs = dynamic([\n    \"coldfusion.exe\", \n    \"coldfusionsvc.exe\"\n    ]);\nlet expected_child_procs = dynamic([\n    \"WMIC.exe\", \n    \"conhost.exe\", \n    \"jnbproxy.exe\",\n    \"CFServiceController.exe\",\n    \"ffmpeg.exe\"\n    ]);\nDeviceProcessEvents\n| where InitiatingProcessFileName in~ (coldfusion_procs)\n| where FileName !in~ (expected_child_procs)\n| where not(ProcessCommandLine has_any (\"ColdFusion\", \"ColdFusion2021\", \"ColdFusion2023\", \"WerFault.exe -u -p\"))\n| project-reorder\n    TimeGenerated,\n    DeviceName,\n    ProcessCommandLine,\n    FileName,\n    InitiatingProcessFileName,\n    InitiatingProcessParentFileName",
+        "queryFrequency": "PT5M",
+        "queryPeriod": "PT5M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": ["InitialAccess"],
+        "techniques": ["T1190"],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT4H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": null,
+        "customDetails": {},
+        "entityMappings": [{"entityType":"Process","fieldMappings":[{"identifier":"CommandLine","columnName":"ProcessCommandLine"}]},{"entityType":"Host","fieldMappings":[{"identifier":"HostName","columnName":"DeviceName"}]}],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

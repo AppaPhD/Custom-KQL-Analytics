@@ -1,0 +1,91 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a7eacdad-c32b-4509-aee2-1d282ab7752d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a7eacdad-c32b-4509-aee2-1d282ab7752d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: MDE-Rundll32 Process Injection",
+                "description": "Rundll32 process injection & Hollowing \n Handling Guidance: 1. inspect the commandline and trace what the person user was trying to attempt. 2. best thing to do is to reach out to the user here just to confirm ",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Mohamed Elgendy\r\n// Source: NA\r\n//References: \r\n// Reviewer: \r\n//\r\n// Description: Rundll32 process injection & Hollowing \r\n// Handling Guidance: Investigate the process execution, host and account. Esclate to the Endpoint Security Team for further investigation\r\n//// Change notes\r\n// ------------\r\n// 06/07/23 Obadiah Bridges - added red team exclusions. updated boilerplate. promoted to CSGP. \r\n//\r\n//\r\n// Query:\r\nDeviceEvents\r\n| where ActionType == \"SetThreadContextRemoteApiCall\" or ActionType == \"NtAllocateVirtualMemoryRemoteApiCall\"\r\n| where FileName == \"rundll32.exe\" and ProcessCommandLine == \"rundll32.exe\"\r\n// Alert Title & Description\r\n| extend Title_ = strcat(\"Endpoint: \",DeviceName,\" - Rundll32 Process Hollowing & Injection\")\r\n| extend HostName_ = toupper(trim_end(@\"\\..+\", DeviceName))\r\n| extend HostDomain_ = extract(@\"[a-zA-Z]+\\.[a-zA-Z]+\\.[a-zA-Z]+\",0, DeviceName)\r\n| where HostName_ !contains \"Dcdsingh\"\r\n| where HostName_ !contains \"CG01VDVSDEV141\"\r\n| sort by TimeGenerated desc\r\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1055"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{Title_}}",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName_"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "HostDomain_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ProcessId",
+                                "columnName": "ProcessId"
+                            },
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

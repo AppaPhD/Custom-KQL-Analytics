@@ -1,0 +1,83 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6f2b1854-b6ba-4f0f-925a-9e0c94b1db10')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6f2b1854-b6ba-4f0f-925a-9e0c94b1db10')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: LDAP - High Volume of Suspicious Recon Activities",
+                "description": "Using Defender for Identity Telemetry,  identify a high volume of sensitive LDAP queries from a single device\n\nHandling Guidance: Determine why LDAP queries are being ran - Is it a Reconnaissance attack? -> Investigate whether the initiating device or account is compromised.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Lucas Trainer\r\n// Source: NA\r\n// References: https://techcommunity.microsoft.com/t5/microsoft-defender-for-endpoint/hunting-for-reconnaissance-activities-using-ldap-search-filters/ba-p/824726\r\n// Reviewer: \r\n//\r\n// Description: This analytic rule looks for a high volume of sensitive LDAP queries from a single device.\r\n// Handling Guidance: Determine why LDAP queries are being ran - Is it a Reconnaissance attack? -> Investigate whether the initiating device or account is compromised.\r\n//\r\n// Change notes\r\n// ------------\r\n// 4/25/2023 Obadiah Bridges - Updated boilerplate, title and moved to production. Update query to exclude false positives. \r\n//\r\n// Query:\r\nlet ldap_filter = dynamic([\r\n    //Below, we enumerate suspicious LDAP filters that are characteristic of recon activity. \r\n    \"servicePrincipalName=*\",\r\n    \"description=*pass*\",\r\n    \"(&(sAMAccountType=805306369)(dnshostname=*))\", //Get-NetComputer - Powerview\r\n    \"(&(samAccountType=805306368)(samAccountName=*)\", //Get-NetUser - Powerview\r\n    \"(&(samAccountType=805306368)(servicePrincipalName=*)\", //Get-NetUser SPNs - Powerview\r\n    \"(&(objectClass=group))\",  //enum ad groups - metasploit\r\n    \"(&(objectCategory=computer)(operatingSystem=*server*))\", //enum ad computers\r\n    \"(&(&(objectCategory=person)(objectClass=user))(|(description=*pass*)(comment=*pass*)))\" //enum ad user comments for password\r\n    \"(samAccountType=805306368)\",\r\n    \"(objectcategory=group)(samaccountname=*admin*)\", //find all groups containing the word admin\r\n    \"(groupType:1.2.840.113556.1.4.803:=2147483650))\", //Find all global security groups\r\n    \"(UserAccountControl:1.2.840.113556.1.4.803:=32))\",     //find user accounts with no password required\r\n    \"(sAMAccountType=805306369)\" //Find all computers\r\n    ]);\r\nlet exceptionDevices = _GetWatchlist('exception_RedTeam_Devices')\r\n    | project SearchKey;\r\nIdentityQueryEvents\r\n| where ActionType == \"LDAP query\"\r\n| where not(DeviceName has_any (exceptionDevices))\r\n| parse Query with * \"Search Filter: \" SearchFilter_\r\n| where SearchFilter_ has_any (ldap_filter)\r\n| summarize CountSuspiciousQueries=count(SearchFilter_) by DeviceName, IPAddress\r\n| where CountSuspiciousQueries >= 5",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1087"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Defender for Identity: {{CountSuspiciousQueries}} Suspicious LDAP Queries in 1 hr from single host",
+                    "alertDescriptionFormat": "Source Device: {{DeviceName}}\nIP Address: {{IPAddress}}\n\nDescription:\nHandling Guidance: ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

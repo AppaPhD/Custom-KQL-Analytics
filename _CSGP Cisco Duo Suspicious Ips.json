@@ -1,0 +1,97 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/fe897bc9-ad7d-4674-bc0d-4da70f4284de')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/fe897bc9-ad7d-4674-bc0d-4da70f4284de')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: Cisco Duo Suspicious Ips",
+        "description": "Looks for IPs in Duo Logs that also have been found in the Threat Intelligence Indicators TableHandling Guidance: Review the IP (TI_ipEntity) and its threat classifcation from the Threat Intelligence data. Determine if the IP has been observed elsewhere in the environment. Confirm if the associated user activity is consistent with historical patterns and legitimate sessions. Look for related alerts or anomalies. If suspicious, follow incident response procedures (e.g., block IP, reset credentials).\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n//Picking up only IOC's that contain the entities we want\nlet TI = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack)\n      and Active == true \n      and ExpirationDateTime > now()\n      and (isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) \n           or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP))\n// Taking the first non-empty value based on potential IOC match availability - As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "// Contributor: Anisha Ponnapati\n// Reviewer:\n// Reference: SEC-14169\n// Description: Looks for IPs in Duo Logs that also have been found in the Threat Intelligence Indicators Table\n// Handling Guidance: Review the IP (TI_ipEntity) and its threat classifcation from the Threat Intelligence data. Determine if the IP has been observed elsewhere in the environment. Confirm if the associated user activity is consistent with historical patterns and legitimate sessions. Look for related alerts or anomalies. If suspicious, follow incident response procedures (e.g., block IP, reset credentials).\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n//Picking up only IOC's that contain the entities we want\nlet TI = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack)\n      and Active == true \n      and ExpirationDateTime > now()\n      and (isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) \n           or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP))\n// Taking the first non-empty value based on potential IOC match availability - As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n| extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project IndicatorId, LatestIndicatorTime, TI_ipEntity, Description, ActivityGroupNames, ThreatType, Url, ExpirationDateTime, ConfidenceScore;\n// Filter Duo logs early and rename timestamp so it is clear where it came from\nlet DuoLogs = CiscoDuo_CL\n| where TimeGenerated >= ago(dt_lookBack)\n      and isnotempty(access_device_ip_s)\n| extend Duo_TimeGenerated = isotimestamp_t;\n// Perform join\nTI\n| join kind=inner (DuoLogs) on $left.TI_ipEntity == $right.access_device_ip_s\n| project \n    LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, \n    ExpirationDateTime, ConfidenceScore, Duo_TimeGenerated, TI_ipEntity,\n    user_name_s, factor_s, result_s, application_name_s, event_type_s, \n    txid_g, user_key_s, access_device_ip_s, access_device_location_city_s, \n    access_device_location_state_s, access_device_location_country_s\n| extend \n    timestamp = Duo_TimeGenerated, \n    Name = tostring(split(user_name_s, '@', 0)[0]), \n    UPNSuffix = tostring(split(user_name_s, '@', 1)[0])",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "P14D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": [
+          "T0817",
+          "T0819",
+          "T0822",
+          "T1078",
+          "T1566"
+        ],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {
+          "TI_IP_Value": "TI_ipEntity",
+          "Indicator": "IndicatorId"
+        },
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "access_device_ip_s"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "user_key_s"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "Url"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

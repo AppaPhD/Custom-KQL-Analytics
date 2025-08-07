@@ -1,0 +1,97 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ddab9e5e-436a-4f8a-bf41-a7c564dd7473')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ddab9e5e-436a-4f8a-bf41-a7c564dd7473')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Endpoint: Possible C2 - Anomalous Remote Tunnelling",
+                "description": "Description: Threat actors use embedded reverse shell (remote tunnelling) to perform C2 attack.\n\nHandling Guidance: Look for InitiatingProcessFolderPath to see what initiated the event (downloads folder is likely a big red flag) and Look at device events for activity around this timeline.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Adrian, Kevin\r\n// Reviewer: Lucas\r\n// Reference: https://medium.com/@truvis.thornton/visual-studio-code-embedded-reverse-shell-and-how-to-block-create-sentinel-detection-and-add-e864ebafaf6d\r\n// Description: Threat actors may use embedded reverse shell (remote tunnelling) to obtain command and control on a device using Microsoft signed binaries. This analytic looks for traffic to the domains associated with tunneling. \r\n// Handling Guidance: Look for InitiatingProcessFolderPath to see what initiated the event (downloads folder is likely a big red flag). Look at the device events\r\n// Change notes\r\n// ------------\r\n// 04/05/24 Adrian,Kevin - Initial version\r\n// 04/08/24 Lucas - Updated description, alert grouping, and lookback for production\r\n// 04/09/24 Adrian - added exclusions for Dev users to filter out FPs\r\n// 04/11/24 Adrian - casted AccountName to lower to fix issue in IdentityInfo table\r\n// 07/18/2024 Adrian - updated zscaler exclusion\r\n// 07/26/2024 Wajahat, Kevin, James - Switched department and job title exclusions\r\n// 08/01/2024 Wajahat and Kevin - added zscaler exclusion \r\n//08/22/2024 Grover Mewborn - updated zscaler exclusion\r\n//09/13/2024 Wajahat Malik and Sufian Tanveer - Changed the whole alert logic to include all the department\r\nDeviceEvents\r\n| where InitiatingProcessCommandLine has \"enable-remote\"\r\n| where InitiatingProcessCommandLine has \"pipe\"\r\n| summarize arg_max(TimeGenerated, *) by DeviceName\r\n| project\r\n    TimeGenerated,\r\n    AccountName,\r\n    DeviceName,\r\n    InitiatingProcessCommandLine,\r\n    InitiatingProcessFileName,\r\n    ActionType,\r\n    InitiatingProcessFolderPath,\r\n    InitiatingProcessParentFileName,\r\n    InitiatingProcessVersionInfoProductName ",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CommandAndControl"
+                ],
+                "techniques": [
+                    "T1572",
+                    "T1219"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Possible C2 - Anomalous VSCode Remote Tunnelling",
+                    "alertDescriptionFormat": "Description: \nThreat actors may use VSCode embedded reverse shell (remote tunnelling) to obtain command and control on a device using Microsoft signed binaries. This analytic looks for traffic to the domains associated with VS Code tunneling. We would not expect non-IT users to have traffic to these domains. \n\nHandling Guidance: \nLook at device events for activity around this timeline for further context. \n",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessFolderPath"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

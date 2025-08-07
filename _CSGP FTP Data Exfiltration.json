@@ -1,0 +1,92 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bfe8fafd-1a09-4364-a9cd-9dcc18e4d831')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bfe8fafd-1a09-4364-a9cd-9dcc18e4d831')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT12H",
+        "queryPeriod": "P1D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AnyAlert",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "DeviceName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "LocalIP"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "RemoteIP"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AdditionalFields_arg"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "Exfiltration"
+        ],
+        "techniques": [
+          "T1048"
+        ],
+        "subTechniques": [],
+        "displayName": "_CSGP: FTP Data Exfiltration",
+        "enabled": true,
+        "description": "Adversaries may send data to a publicly hosted ftp server leading to a potential indicator of data exfiltration activities.",
+        "alertRuleTemplateName": null,
+        "query": "// Contributor: Dawinder Singh, James Kim\n// Reviwer:\n// Reference: MITRE T1048\n// Description: STOR ftp command is used to upload a file from client to server. The code 226 indicates a successful completion of data transfer.\n// Handling Guidance: Look at to which server the file is being uploaded to and go through these steps/questions:\n// 1. Look at the remote IP and ftp:// call to see if it has been seen or recognized in our envrionment through back testing (is it a public or private ip?)\n// 2. How many megabytes or bytes per a second are being transferred? Is there a suspiciously large amount being transferred?\n// 3. How long is the transfer compared to normal queries seen in our enviornment, is it taking longer than we usually see?\n// 4. Are we seeing a large amount of FTP queries transferring files using the STOR command?\n// 5. Reach out to user\n// Note: If remote IP is known to be benign, add to exclusions list\n// 3/6/25 - Adrian - added IP \"169.254.75.136\" to exclusions list for picturall activity from AV engineer users\nlet exclusions = dynamic([\"65.222.180.50\", \"212.129.44.107\", \"79.125.94.131\", \"204.44.192.47\", \"178.250.7.44\"]);\nDeviceNetworkEvents\n| where RemotePort == 21\n| where AdditionalFields.reply_code == 226\n| where AdditionalFields.command contains \"STOR\"\n| where not(RemoteIP in (exclusions))\n| where not(ipv4_is_in_range(RemoteIP, \"10.0.0.0/8\"))\n| where not(ipv4_is_in_range(RemoteIP, \"172.16.0.0/12\"))\n| where not(ipv4_is_in_range(RemoteIP, \"192.168.0.0/16\"))\n| where not(ipv4_is_in_range(RemoteIP, \"169.254.0.0/16\")) // Link-local\n| project TimeGenerated, DeviceName, LocalIP, RemoteIP, AdditionalFields.arg, AdditionalFields.command, AdditionalFields.reply_code, AdditionalFields.reply_msg"
+      }
+    }
+  ]
+}

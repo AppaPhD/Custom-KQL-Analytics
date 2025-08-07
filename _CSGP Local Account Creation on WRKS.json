@@ -1,0 +1,96 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4053284e-d656-4729-908b-c074c3717449')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4053284e-d656-4729-908b-c074c3717449')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Local Account Creation on WRKS",
+                "description": "Alerts when a local account has been created on a workstation",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Obadiah Bridges\n// Source: NA\n//References\n// Reviewer: Mohamed Elgendy \n//\n// Description: This rule detects when a local user account is created on a machine.\n// Handling Guidance: Contact the indvidiual who created the account and determine what the business purpose of the account is for. Is this intentional activity? Is there a ticket associated with this activity that can be referenced?\n//\n// Query:\n// For this query we are focused on Local Accounts created on workstations. \nlet removedAccountNames_ = dynamic([\"default\", \"ddagent\", \"ddagentuser\", \"lenovo\", \"devv\", \"defaultuser100000\", \"defaultuser100001\"]);\n//let removedDeviceNames_ = dynamic([\"ushenpstrdc01.str.wwstar.com\", \"cg01dcusweb01.usweb.costar.local\", \"ushenpstrdc02.str.wwstar.com\"]);\nlet removedAccountDomains_ = dynamic ([\"us\",\"str0\",\"usweb\"]);\nlet removedMachineGroups_ = dynamic ([\"Domain Controllers\", \"Servers\"]);\nDeviceEvents \n//| where TimeGenerated > ago(30d)\n| where ActionType == \"UserAccountCreated\"\n| extend _AccountCreator = InitiatingProcessAccountName\n| where not(MachineGroup has_any (removedMachineGroups_))\n//| where not(DeviceName has_any (removedDeviceNames_)) \n| where not(AccountDomain has_any (removedAccountDomains_)) \n| where not(AccountName has_any (removedAccountNames_)) \n| where InitiatingProcessAccountSid <> \"S-1-5-18\"\n| extend _AlertTitle = strcat(\"Local Account Creation on \", DeviceName)\n| extend _AlertDescription = strcat(\"This rule detects when a local user account is created in the environment. Domain Controllers and other notable actors have been removed from the query. \")\n| extend _HandlingGuidance = strcat(\"Contact the indvidiual who created the account and determine what the business purpose of the account is for. Is this intentional activity? Is there a ticket associated with this activity that can be referenced? Most of the time, this shouldn't be happening.\")\n| where _AccountCreator !startswith \"svc\"\n// turns each JSON element from EventData into it's own column\n//removes Domain names of \"US\" and \"USWEB\"\n| extend CreatedAccountName=AccountName\n| project\n    TimeGenerated, \n    CreatedAccountName,\n    AccountDomain,\n    _AccountCreator,\n    DeviceName,\n    MachineGroup,\n    _AlertTitle,\n    _AlertDescription,\n    _HandlingGuidance",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1136"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{_AlertTitle}}",
+                    "alertDescriptionFormat": "{{_AlertDescription}}\n{{_HandlingGuidance}}",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "CreatedAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "_AccountCreator"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

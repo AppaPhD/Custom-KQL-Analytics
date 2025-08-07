@@ -1,0 +1,66 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/057ea285-4924-4d64-b796-c54a322aa18e')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/057ea285-4924-4d64-b796-c54a322aa18e')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Azure Monitor-Generating a download URL from an Azure VM Disk-Medium",
+                "description": "This query identifies when someone creates a download URL from an Azure VM Disk which can lead to exfiltrating data",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Author: Samer Takieldin\r\n//Source: NA\r\n//Reviewer:Samer Takieldin\r\n//Description: This query identifies when someone creates a download URL from an Azure VM Disk which can lead to exfiltrating data\r\n//Handling guidance: Reach out to the user, which is under \"Actor/Caller\" and investigate why they are performing these actions. If necessary involve their manager\r\n//\r\nAzureActivity\r\n| where OperationNameValue == \"MICROSOFT.COMPUTE/DISKS/BEGINGETACCESS/ACTION\"\r\n| where ActivityStatusValue == \"Success\"\r\n| extend DiskName = tostring(Properties_d.resource)\r\n| extend ActivityStatus\r\n| project\r\n    TimeGenerated,\r\n    ActivityStatus,\r\n    CallerIpAddress,\r\n    Actor=Caller,\r\n    ['Actor IP Address']=CallerIpAddress,\r\n    ['Azure Subscription Id']=SubscriptionId,\r\n    ['Azure Resource Group']=ResourceGroup,\r\n    DiskName",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1567"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "UserIdentityArn": "DiskName",
+                    "EventName": "ActivityStatus",
+                    "SourceIPAddress": "CallerIpAddress"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

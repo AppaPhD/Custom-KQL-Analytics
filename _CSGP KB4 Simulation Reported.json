@@ -1,0 +1,64 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/79078d2a-f3b1-4cc6-b7d3-cbb53dcb10c8')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/79078d2a-f3b1-4cc6-b7d3-cbb53dcb10c8')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "NRT",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: KB4 Simulation Reported",
+                "description": "This analytic rule is used to send positive reinforcement back to the user who successfully reported a KnowBe4 phishing simulation",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Contributor: James Kim, Renee Sen, Leah Clements\n// Reviewer: \n//\n// Description: This is used to auto respond when a user successfully reports a simulation from KnowBe4\n// Handling Guidance: N/A\n//\n// Change notes\n// ------------\n// 12/11/2024 -- Original Version\nlet KB4Subjects = _GetWatchlist('KB4Subjects')\n    | project Subject, Sender;\nEmailEvents\n| where RecipientEmailAddress == \"eopquarantine@costar.com\" \n| where Subject !startswith \"Re:\"\n| distinct TimeGenerated, Subject, SenderFromAddress\n| extend ReportedType = tostring(split(Subject, ':')[0])\n| extend Sender = tostring(split(Subject, '|')[1])\n| extend Subject = tostring(extract(@'\\|\\((.*?)\\)\\s\\d{1,2}/\\d{1,2}/\\d{4}', 1, Subject))\n| where ReportedType == \"Phishing\"\n| join kind=inner KB4Subjects on Subject, Sender\n| distinct TimeGenerated, Subject, Sender, SenderFromAddress, ReportedType",
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{Subject}} ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "SenderFromAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

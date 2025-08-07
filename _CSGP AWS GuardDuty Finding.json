@@ -1,0 +1,125 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a981b35d-f9b5-4f86-a1b3-fbcdaff7a643')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a981b35d-f9b5-4f86-a1b3-fbcdaff7a643')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS GuardDuty Finding",
+                "description": "As we are now ingesting GD alerts via Wiz, this rule should only fire when the following GD alerts are observed:\nDefenseEvasion:Runtime/ProcessInjection.Proc\nDefenseEvasion:Runtime/ProcessInjection.Ptrace\nDefenseEvasion:Runtime/ProcessInjection.VirtualMemoryWrite\nDefenseEvasion:Runtime/PtraceAntiDebugging\nDefenseEvasion:Runtime/SuspiciousCommand\nExecution:Runtime/MaliciousFileExecuted\nExecution:Runtime/SuspiciousCommand\nExecution:Runtime/SuspiciousTool\nObject:S3/MaliciousFile\n\nHandling Guidance: Review payload and extended details in either the affected account, or in aws_security_prd. Use additional resources such as CloudTrail, Detective, etc.  Reach out to secops for any questions. Investigation tips/procedures: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/207872216/AWS+GuardDuty+IR+Guide (Incident response procedures can be found underneath the investigation page)",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Description: Detects when a medium specified guardduty alert has fired. (See analytic rule description)\n//Contributors: Nixy Camacho\n// Reference: https://servicedesk.costargroup.com/browse/SEC-11021 \n//Handling Guidance: Review payload and extended details in either the affected account, or in aws_security_prd. Use additional resources such as CloudTrail, Detective, etc.  Reach out to secops for any questions. Investigation tips/procedures: https://wiki.costargroup.com/display/CSSO/Incident+Investigation+-+AWS+GuardDuty (Incident response procedures can be found underneath the investigation page)\n//\n//Description: Detects when a medium specified guardduty alert has fired. (See analytic rule description)\n//Contributors: Nixy Camacho\n// Reference: https://servicedesk.costargroup.com/browse/SEC-11021 \n//Handling Guidance: Review payload and extended details in either the affected account, or in aws_security_prd. Use additional resources such as CloudTrail, Detective, etc.  Reach out to secops for any questions. Investigation tips/procedures: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/207872216/AWS+GuardDuty+IR+Guide (Incident response procedures can be found underneath the investigation page)\n//\nlet specifiedGDAlerts = dynamic([\n    'DefenseEvasion:Runtime/ProcessInjection.Proc', \n    'DefenseEvasion:Runtime/ProcessInjection.Ptrace', \n    'DefenseEvasion:Runtime/ProcessInjection.VirtualMemoryWrite',\n    'DefenseEvasion:Runtime/PtraceAntiDebugging',\n    'DefenseEvasion:Runtime/SuspiciousCommand',\n    'Execution:Runtime/MaliciousFileExecuted',\n    'Execution:Runtime/SuspiciousCommand',\n    'Execution:Runtime/SuspiciousTool',\n    'Object:S3/MaliciousFile']);\nAWSGuardDuty_Base\n| where Severity in (\"High\", \"Medium\")\n| where ActivityType in (specifiedGDAlerts)\n| join kind=inner _GetWatchlist('aws-accounts') on $left.AccountId == $right.accountid\n| extend \n    BucketName_ = tostring(parse_json(tostring(ResourceDetails.s3BucketDetails))[0].name),\n    principalId_ = tostring(parse_json(tostring(ResourceDetails.accessKeyDetails)).principalId),\n    unusualbehavior_ = tostring(parse_json(tostring(parse_json(tostring(ServiceDetails.additionalInfo)).unusualBehavior)))\n| extend sample_ = tostring(parse_json(tostring(ServiceDetails.additionalInfo))['sample'])\n| extend Testing_ = iff((sample_ has \"true\"), \"Yes\", \"No\")\n| extend Description_ = strcat(\n                            Title,\n                            \"\\n\",\n                            \"\\n\",\n                            \"Description: \",\n                            \"\\n\",\n                            Description,\n                            \"\\n\"\n                        )\n| extend Severity = iff(ActivityType in (\"Object:S3/MaliciousFile\"), \"Informational\", \"Medium\")\n| summarize arg_max(TimeCreated, *) by FindingId\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion",
+                    "Execution"
+                ],
+                "techniques": [
+                    "T1631",
+                    "T1055",
+                    "T1204",
+                    "T1609"
+                ],
+                "subTechniques": [
+                    "T1631.001",
+                    "T1204.002"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "CloudApplication"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "GuardDuty - {{ActivityType}}: {{BucketName_}}",
+                    "alertDescriptionFormat": "Description: {{{Description}} \n\nInvestigation tips/procedures: https://wiki.costargroup.com/display/CSSO/Incident+Investigation+-+AWS+GuardDuty (Incident response procedures can be found underneath the investigation page)",
+                    "alertSeverityColumnName": "Severity",
+                    "alertDynamicProperties": [
+                        {
+                            "alertProperty": "AlertLink",
+                            "value": "FindingLink"
+                        }
+                    ]
+                },
+                "customDetails": {
+                    "ARN": "arn",
+                    "RequestUri": "RequestUri",
+                    "Namespace": "Namespace",
+                    "ActionType": "ActionType",
+                    "Operator": "AccountName",
+                    "S3BucketName": "BucketName_"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AppId",
+                                "columnName": "BucketName_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "principalId_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "name"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "RemoteIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

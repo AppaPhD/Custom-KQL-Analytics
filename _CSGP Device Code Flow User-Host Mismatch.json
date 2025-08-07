@@ -1,0 +1,88 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1e39ff77-bc86-4019-b30e-3ffb494af9bc')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1e39ff77-bc86-4019-b30e-3ffb494af9bc')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "P1D",
+        "queryPeriod": "P7D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {
+          "AppDisplayName": "AppDisplayName"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "DisplayName",
+                "columnName": "DeviceName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "Username"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPAddress"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "_CSGP: Device Code Flow User-Host Mismatch",
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": [
+          "T1566"
+        ],
+        "subTechniques": [
+          "T1566.002",
+          "T1566.003"
+        ],
+        "displayName": "_CSGP: Device Code Flow User-Host Mismatch",
+        "enabled": true,
+        "description": "Detect potential device code phishing activity by identifying sign-ins that use the Device Code Flow (DCF) authentication protocol. The query returns users who authenticated via DCF along with enrichment data - such as IP address, application details, and location\u2014to help identify mismatches or suspicious behavior.",
+        "alertRuleTemplateName": null,
+        "query": "// Contributor: Anisha Ponnapati\n// Reviewer:\n// Reference: SEC-15320\n// Description: Detect potential device code phishing activity by identifying sign-ins that use the Device Code Flow (DCF) authentication protocol. The query returns users who authenticated via DCF along with enrichment data \u2014 such as IP address, application details, and location\u2014to help identify mismatches or suspicious behavior. Device code flow is an authorization mechanism designed for devices that cannot easily handle a standard browser-based authentication flow, such as IoT devices or command-line tools. It is a high-risk authentication method that can be part of a phishing attack or used to access corporate resources on unmanaged devices. Handling Guidance: 1) Gather context by - checking the Source IP (IPAddress), previous activity from IP, is the IP from a geolocation that's anomalous, how was it initiated, is it a known App, and any other inconsistencies. If need more insight, reach out to User. 2) If found to be a True Positive - Revoke user sessions, block suspicious App, review and investigate sign-ins, reset affected user's credentials, check for other activity by same App/IP, check audit logs for privilege escalation or lateral movement. \nlet lookback = 7d;\nlet device_code_usernames_array = toscalar(// Get usernames from device code sign-ins\n    SigninLogs\n    | where TimeGenerated > ago(lookback)\n    | where AuthenticationProtocol == \"deviceCode\"\n    | where AppDisplayName !in (\"CoStar Kubernetes Authentication\", \"web-k8s-auth-api\")\n    | extend Username = tostring(split(UserPrincipalName, \"@\")[0])\n    | summarize make_set(Username) // Create a dynamic array of unique usernames\n);\nlet recent_user_workstations = // Enrich with workstation info from DeviceInfo\n    DeviceInfo\n    | where DeviceType == \"Workstation\"\n    | where SensorHealthState == \"Active\"\n    | where MachineGroup != \"Inactive Devices\"\n    | extend UserNameParsed = tostring(LoggedOnUsers[0].UserName)\n    | where UserNameParsed has_any (device_code_usernames_array)\n    | extend MachineType = tostring(split(MachineGroup, \": \")[1])\n    | where isnotempty(MachineType)\n    | distinct DeviceName, UserNameParsed, MachineType;\nlet device_code_signins = // Main query for device code sign-ins\n    SigninLogs\n    | where TimeGenerated > ago(lookback)\n    | where AuthenticationProtocol == \"deviceCode\"\n    | where AppDisplayName !in (\"CoStar Kubernetes Authentication\", \"web-k8s-auth-api\")\n    | extend Username = tostring(split(UserPrincipalName, \"@\")[0])\n    | summarize \n        IPUsageCount = count(),\n        AllTimestamps = make_list(TimeGenerated, 1000),\n        LatestTime = arg_max(TimeGenerated, AppDisplayName, DeviceDetail, Location, AuthenticationProtocol)\n        by Username, IPAddress;    \ndevice_code_signins // Join with workstation enrichment\n| join kind=leftouter (\n    recent_user_workstations\n) on $left.Username == $right.UserNameParsed"
+      }
+    }
+  ]
+}

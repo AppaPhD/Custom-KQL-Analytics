@@ -1,0 +1,111 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/3b60cce6-0da3-4317-951f-67a178ba8569')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/3b60cce6-0da3-4317-951f-67a178ba8569')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: LSASS & LSA Enumeration via PowerShell or CMD",
+                "description": "This detection identifies potential enumeration or tampering of LSASS (Local Security Authority Subsystem Service) and LSA (Local Security Authority) registry keys using PowerShell or Command Prompt also is LSASS or LSA is used in command line. Attackers often query LSASS to extract credentials or modify security policies for privilege escalation or persistence..",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: kahmadjan\r\n// Reviewer: wmalik\r\n// Reference: \r\n//\r\n// Description: This detection identifies potential enumeration or tampering of LSASS (Local Security Authority Subsystem Service) and LSA (Local Security Authority) registry keys using PowerShell or Command Prompt also is LSASS or LSA is used in command line. Attackers often query LSASS to extract credentials or modify security policies for privilege escalation or persistence\r\n// Handling Guidance: Investigate the initiating process, verify if the activity is legitimate, check for signs of credential dumping or privilege escalation, and isolate the system if malicious behavior is confirmed.\r\n// Query Modifications: \r\nDeviceProcessEvents\r\n| where ProcessCommandLine has_any(\"lsass\", @\"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsass\", @\"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa\", '\"lsa\"')\r\n| where AccountDomain has \"us\"\r\n| where InitiatingProcessFolderPath has \"Powershell.exe\" or InitiatingProcessFolderPath has \"cmd.exe\"\r\n| summarize \r\n    CommandCount = make_set(ProcessCommandLine),  \r\n    DailyCount = count()\r\n    by bin(TimeGenerated, 1d), AccountName, ActionType, DeviceName, FileName, InitiatingProcessFolderPath\r\n| project TimeGenerated, AccountName, ActionType, DeviceName, FileName, InitiatingProcessFolderPath, CommandCount",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess",
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1003",
+                    "T1552",
+                    "T1012"
+                ],
+                "subTechniques": [
+                    "T1552.002"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "CommandCount"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessFolderPath"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

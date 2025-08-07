@@ -1,0 +1,78 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c229b150-6806-4803-9fce-378abdb8205a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c229b150-6806-4803-9fce-378abdb8205a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "NRT",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Azure AD - User at High Risk (NRT)",
+                "description": "Identifies suspicous actions related to user account within the Azure Active Directory. This rule is triggered when an Azure AD User risk level is set to High. \n\nhttps://docs.microsoft.com/en-us/azure/active-directory/identity-protection/howto-identity-protection-remediate-unblock",
+                "severity": "High",
+                "enabled": true,
+                "query": "// Contributor: Gunther Abbot\r\n// Reviewer: Lucas Trainer\r\n// Wiki page: https://wiki.costargroup.com/x/ET80Mg\r\n// Reference: https://docs.microsoft.com/en-us/azure/active-directory/identity-protection/concept-identity-protection-risks\r\n// Description: Identifies a user marked as high risk. Further\r\n//     sign-ins are blocked due to conditional access policies.\r\n// Handling Guidance:\r\n// (1) Note that a user can be marked high risk automatically by AAD \r\n//     Identity Protection OR manually by an administrator.\r\n//     Look for \"adminConfirmedUserCompromised\" in the RiskDetail column,\r\n//     indicating manual confirmation.\r\n// (2) Review risk detections in AAD Identity Protection at the following\r\n//     link: https://entra.microsoft.com/#view/Microsoft_AAD_IAM/SecurityMenuBlade/~/RiskDetections/menuId/RiskyUsers\r\n// (3) Submit a ticket to helpdesk requesting a password reset for the\r\n//     user. Note that the user may not have access to Teams/Outlook, \r\n//     and the Security team will have to dismiss risk before the user\r\n//     may sign in again.\r\n// (4) Once the user's password has been reset, navigate to the AAD\r\n//     Identity Protection Risky Users portal at the following link\r\n//     and select \"dismiss user risk\" for the account:\r\n//     https://entra.microsoft.com/#view/Microsoft_AAD_IAM/SecurityMenuBlade/~/RiskyUsers/menuId/RiskyUsers\r\n//\r\n// Date Author - Change notes\r\n// ---------------------------------------------------\r\n// 02/07/23 Gunther Abbot - Initial version.\r\n// 02/08/23 Gunther Abbot - Added initiator to alert title and description.\r\n// 04/18/23 Gunther Abbot - Filter out sign-ins confirmed compromised\r\n// 04/19/23 Gunther Abbot - Add AadUserId field\r\n// 11/07/23 Evgeniy Cralev - Exclusion for hgruber@costar.com and dsingh@costar.com\r\n// 02/07/23 James Kim - Exclusion for tsheehy@costar.com and purple team accounts\r\n//\r\n// Query: \r\nAADRiskyUsers\r\n| where RiskLevel =~ \"high\"\r\n| where RiskDetail != \"adminConfirmedSigninCompromised\"\r\n| parse UserPrincipalName with AccountName \"@\" UpnSuffix\r\n| where UserPrincipalName !in (\"tsheehy@costar.com\", \"dsingh@costar.com\") //Excluding Hans Gruber (test account) and Dawinder Singh (frequently locked out due to testing)\r\n| extend InitiatedByAdmin = RiskState == \"confirmedCompromised\"\r\n| extend Initiator = iff(InitiatedByAdmin, \"Administrator\", \"Azure\")\r\n| extend Severity = iff(InitiatedByAdmin, \"Informational\", \"High\")\r\n| project \r\n    AccountName,\r\n    AadUserId = Id,\r\n    UpnSuffix,\r\n    Initiator,\r\n    Severity,\r\n    UserPrincipalName, \r\n    UserDisplayName, \r\n    RiskDetail, \r\n    RiskState, \r\n    RiskLastUpdatedDateTime",
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "AAD: {{Initiator}} marked user high risk: {{UserPrincipalName}}",
+                    "alertDescriptionFormat": "The account of user {{UserDisplayName}} ({{UserPrincipalName}}) has been set to high risk. Further sign-ins will be blocked until the user's risk is dismissed. This action was initiated by: {{Initiator}}.\n\nHandling Guidance:\n\n(1) Note that a user can be marked high risk automatically by AAD Identity Protection OR manually by an administrator. Look for \"adminConfirmedUserCompromised\" in the RiskDetail column, indicating manual confirmation.\n\n(2) Review risk detections in AAD Identity Protection at the following link: https://entra.microsoft.com/#view/Microsoft_AAD_IAM/SecurityMenuBlade/~/RiskDetections/menuId/RiskyUsers\n\n(3) Submit a ticket to helpdesk requesting a password reset for the user. Note that the user may not have access to Teams/Outlook, and the Security team will have to dismiss risk before the user may sign in again.\n\n(4) Once the user's password has been reset, navigate to the AAD Identity Protection Risky Users portal at the following link and select \"dismiss user risk\" for the account: https://entra.microsoft.com/#view/Microsoft_AAD_IAM/SecurityMenuBlade/~/RiskyUsers/menuId/RiskyUsers",
+                    "alertSeverityColumnName": "Severity",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "RiskState": "RiskState",
+                    "RiskDetail": "RiskDetail",
+                    "RiskLastUpdatedTime": "RiskLastUpdatedDateTime"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UpnSuffix"
+                            },
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "AadUserId"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

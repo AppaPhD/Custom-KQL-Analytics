@@ -1,0 +1,94 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9c0005f5-b028-4717-b1d0-1f8b6bb99f24')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9c0005f5-b028-4717-b1d0-1f8b6bb99f24')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Malicious/Suspicious IP Address from One User",
+                "description": "This query is designed to identify high-risk sign-ins that may indicate compromised credentials, particularly when the sign-ins originate from unmanaged or non-compliant devices. It specifically flags events associated with differing risk factors, such as the use of leaked credentials and connections from known malicious IP addresses.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Analytic Rule Name: _DEV: Malicious/Suspicious IP Address from One User\r\n// Contributor: Kamran Ahmadjan\r\n// Reviewer: \r\n// Reference:\r\n//\r\n// Description: This query identifies high-risk sign-ins where credentials may be compromised, originating from unmanaged or non-compliant devices. The sign-ins are flagged based on specific risk events like leaked credentials or connections from malicious IP addresses.\r\n// Handling Guidance: Investigate these sign-ins promptly. Start by reviewing the sign-in logs for unusual patterns, such as different user agents or unfamiliar locations. Revoke sessions and enforce MFA as immediate countermeasures. If the account appears compromised, mark the user as risky through SecBot or the Azure Portal for safe measures. Also one important thing to note is that if this IP is coming back as Zscaler please update the watchlist accordinly\r\n//\r\n// Change notes\r\n// ------------\r\n// \r\n//Risk Event Types sourced from https://learn.microsoft.com/en-us/graph/api/resources/signin?view=graph-rest-1.0\r\nlet zscaler =  _GetWatchlist('Zscaler_Public_IP_Ranges')\r\n    | project IP, Source;\r\n// Retrieve the watchlist\r\nlet Costar = _GetWatchlist('Costar_Public_IP_Ranges')\r\n    | project SearchKey;\r\nlet riskeventTypes_ = dynamic([\r\n    \"leakedCredentials\",\r\n    \"passwordSpray\",\r\n    \"maliciousIPAddress\",\r\n    \"investigationsThreatIntelligence\",\r\n    \"malwareInfectedIPAddress\",\r\n    \"generic\",\r\n    \"phishing\",\r\n    \"bruteForceAttack\",\r\n    \"suspiciousLogin\",\r\n    \"unauthorizedAccess\",\r\n    \"dataExfiltration\",\r\n    \"insiderThreat\",\r\n    \"ransomware\",\r\n    \"commandAndControl\",\r\n    \"privilegeEscalation\",\r\n    \"unusualNetworkActivity\"\r\n    ]);\r\nSigninLogs\r\n| where RiskEventTypes_V2 has_any(riskeventTypes_)\r\n| where ResultType == \"0\"\r\n| where DeviceDetail.isCompliant <> true and DeviceDetail.isManaged <> true\r\n| evaluate ipv4_lookup(Costar, IPAddress, SearchKey, return_unmatched = true)\r\n| evaluate ipv4_lookup(zscaler, IPAddress, IP, return_unmatched = true)\r\n| extend CostarIPs = coalesce(ipv4_is_in_range(IPAddress, SearchKey), False)\r\n| extend ZscalerIP = coalesce(ipv4_is_in_range(IPAddress, IP), False)\r\n| where CostarIPs == \"false\" or isempty(CostarIPs)\r\n| where ZscalerIP == \"false\" or isempty(ZscalerIP)\r\n| extend City = LocationDetails.city \r\n| extend Country = LocationDetails.countryOrRegion \r\n| extend State = LocationDetails.state\r\n| project\r\n    TimeGenerated, \r\n    ZscalerIP,\r\n    CostarIPs,\r\n    IPAddress,\r\n    OperationName,\r\n    Identity,\r\n    AlternateSignInName,\r\n    AppDisplayName,\r\n    UserAgent,\r\n    RiskEventTypes_V2,\r\n    City,\r\n    State,\r\n    Country,\r\n    RiskDetail,\r\n    RiskLevelDuringSignIn",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1212"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Identity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AppId",
+                                "columnName": "AppDisplayName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": [
+                    {
+                        "columnName": "UserAgent"
+                    }
+                ],
+                "templateVersion": null
+            }
+        }
+    ]
+}

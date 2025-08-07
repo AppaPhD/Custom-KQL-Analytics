@@ -1,0 +1,102 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5264ef57-fbdd-4862-a952-ea49267bfa33')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5264ef57-fbdd-4862-a952-ea49267bfa33')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS Role Elevation: User Assuming highly privileged OrganizationAccountAccessRole",
+                "description": "This detection identifies instances where the OrganizationAccountAccessRole was assumed in AWS, which may indicate privilege escalation, unauthorized access, or potential credential compromise within our AWS Organization. \n\nHandling Guidance: Typically, OrganizationAccountAccessRole should not be used except in cases of account maintenance. Identify if this was a planned or expected. Review the account and the user.",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Kamran Ahmadjan\r\n//Source:  NA\r\n//Reviewer:\r\n// Description: This detection identifies instances where the OrganizationAccountAccessRole was assumed in AWS, which may indicate privilege escalation, unauthorized access, or potential credential compromise within our AWS Organization.\r\n// Handling Guidance: Typically, OrganizationAccountAccessRole should not be used except in cases of account maintenance. Identify if this was a planned or expected. Review the account and the user.\r\n// Change Log: \r\nAWSCloudTrail\r\n| where EventName == \"AssumeRole\"\r\n| extend roleArn = tostring(parse_json(RequestParameters).roleArn)\r\n| where roleArn has \"OrganizationAccountAccessRole\" or roleArn has \"OrgAdmin\"\r\n| where not(ipv4_is_in_range(SourceIpAddress, '38.109.150.32/27'))//Costar Trusted IP range\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| project-rename AccountName = name\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| project TimeGenerated, AccountName, UserIdentity, UserIdentityArn, AWSRegion, SessionIssuerUserName, SourceIpAddress, EventName, roleArn, UserAgent",
+                "queryFrequency": "PT10M",
+                "queryPeriod": "PT10M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1580"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "SessionIssuerUserName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "roleArn"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": [
+                    {
+                        "columnName": "UserAgent"
+                    }
+                ],
+                "templateVersion": null
+            }
+        }
+    ]
+}

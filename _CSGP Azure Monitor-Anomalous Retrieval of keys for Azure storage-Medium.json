@@ -1,0 +1,62 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4bed5bbf-f5e3-4852-98aa-bc5401173b5a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4bed5bbf-f5e3-4852-98aa-bc5401173b5a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Azure Monitor-Anomalous Retrieval of keys for Azure storage-Medium",
+                "description": "Detect when a user retrieves keys for Azure storage for the first time compared to the previous time range. If a user hasn't puled keys in over 90 days",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Detect when an Azure AD service principal is given access to an Azure RBAC scope, i.e contributor to a subscription or resource group\r\nAzureActivity\r\n| where OperationNameValue == \"MICROSOFT.AUTHORIZATION/ROLEASSIGNMENTS/WRITE\"\r\n| extend ServicePrincipalObjectId = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalId)\r\n| extend ServicePrincipalType = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalType)\r\n| extend Scope = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).Scope)\r\n| extend RoleAdded = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).requestbody)).Properties)).RoleDefinitionId)\r\n| extend Actor = tostring(Properties_d.caller)\r\n| where ServicePrincipalType == \"ServicePrincipal\"\r\n| project TimeGenerated, RoleAdded, Scope, ServicePrincipalObjectId, Actor",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1552"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

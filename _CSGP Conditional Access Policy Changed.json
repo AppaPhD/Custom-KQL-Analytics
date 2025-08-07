@@ -1,0 +1,82 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a65693cf-150b-4e43-b953-e40170bd91e5')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a65693cf-150b-4e43-b953-e40170bd91e5')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Conditional Access Policy Changed",
+                "description": "This alert identifies when a Conditional Access Policy is changed. \n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Contributor: Anthony Edelstein\n// Reviewer: \n// Reference:https://github.com/reprise99/Sentinel-Queries/blob/7854470ea86ddbe1c68b0fd499d7d27b84598732/Azure%20Active%20Directory/Audit-DetectConditionalAccessChangesAfterHours.kql\n//\n// Description: This query identifies changes made to a conditional access policy.\n// Handling Guidance: Use the workbook \"Conditional Access Change Workbook\" to determine what has changed. Find the PCN in Jira if applicable.\n//\n// Date     | Author                             | Change notes\n// ---------------------------------------------------\n// 04/03/2023 | Anthony Edelstein | 1.0 \n// 08/03/2023 | Adrian Shina | Added handling guidance\n// Query\nAuditLogs\n| where OperationName has \"conditional access\"\n| extend ['Conditional Access Policy Name'] = tostring(TargetResources[0].displayName)\n| extend Actor = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n| extend Description_ = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[0].newValue)).grantControls)).authenticationStrength)).description)\n| extend NewPolicyValue = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[0].newValue)))\n| extend OldPolicyValue = tostring(parse_json(tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[0].oldValue)))\n| extend Changes = bag_pack(NewPolicyValue,1)\n| project \n    OperationName, \n    ['Conditional Access Policy Name'], \n    Actor,\n    Description_,\n    Result,\n    NewPolicyValue,\n    OldPolicyValue,\n    Changes\n \n\n \n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "ResourceDevelopment",
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1587",
+                    "T1588",
+                    "T1565"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Conditional Access Policy Changed: {{Conditional Access Policy Name}}",
+                    "alertDescriptionFormat": "{{Actor}} has changed the policy for {{Conditional Access Policy Name}}.\nHandling guidance: Use the workbook \"Conditional Access Change Workbook\" to determine what has changed. Find the PCN in Jira if applicable.",
+                    "alertDynamicProperties": [
+                        {
+                            "alertProperty": "ExtendedLinks",
+                            "value": "Changes"
+                        }
+                    ]
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Actor"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

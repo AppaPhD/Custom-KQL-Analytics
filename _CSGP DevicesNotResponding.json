@@ -1,0 +1,60 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4097c82a-57c3-45cd-92b4-b5fbc5195664')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4097c82a-57c3-45cd-92b4-b5fbc5195664')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: DevicesNotResponding",
+                "description": "This is a rule to notify us when a device is not showing any signs of activity in a 24-hour span, weekends are excluded in this query.\n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "DeviceProcessEvents\r\n| where Timestamp between (ago(31d) .. ago(1d))\r\n| where dayofweek(Timestamp) != 0 and dayofweek(Timestamp) != 6\r\n| summarize LastActivity=max(Timestamp) by DeviceId, DeviceName\r\n| join kind=leftanti (\r\n    DeviceProcessEvents\r\n    | where Timestamp > ago(1d)\r\n    | summarize by DeviceId\r\n    )\r\n    on DeviceId\r\n| where DeviceName !contains \"ip\"\r\n| where DeviceName !contains \"ec2\"\r\n| where DeviceName !contains \"cg01\"\r\n| where DeviceName !contains \"hn50\"\r\n| where DeviceName !contains \"prd\"\r\n| where DeviceName !contains \"cs01\"\r\n| where DeviceName !contains \"-\" \r\n| where DeviceName !contains \"com\" \r\n| where DeviceName contains \"us.costar.local\"\r\n| project AbsentDeviceId=DeviceId, LastSeen=LastActivity, DeviceName",
+                "queryFrequency": "PT12H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1489"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

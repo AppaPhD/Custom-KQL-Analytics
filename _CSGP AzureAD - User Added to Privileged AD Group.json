@@ -1,0 +1,62 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bc89f1af-7a86-48b6-bca5-263ef238db10')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bc89f1af-7a86-48b6-bca5-263ef238db10')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AzureAD - User Added to Privileged AD Group",
+                "description": "",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "// Contributor: \n// Source:  \n// Reviewer: \n//\n// Description:\n// Handling Guidance:\n//\n// Query: \nlet IdentityInfo_ = IdentityInfo\n| where TimeGenerated >= ago(8d)\n| distinct AccountName, AccountDisplayName, AccountUPN, OnPremisesDistinguishedName, IsAccountEnabled, Manager, Department, JobTitle;\nlet timeframe = 1h;\nlet OperationList = dynamic([\"Add member to role\", \"Add member to role in PIM requested (permanent)\"]);\nlet PrivilegedGroups = dynamic([\"UserAccountAdmins\", \"PrivilegedRoleAdmins\", \"TenantAdmins\"]);\nAuditLogs\n| where TimeGenerated >= ago(timeframe)\n    and LoggedByService =~ \"Core Directory\"\n    and Category =~ \"RoleManagement\"\n| where OperationName in~ (OperationList)\n| mv-expand TargetResources\n| extend modifiedProperties = parse_json(TargetResources).modifiedProperties\n| mv-expand modifiedProperties\n| extend\n    DisplayName = tostring(parse_json(modifiedProperties).displayName),\n    GroupName =  trim(@'\"', tostring(parse_json(modifiedProperties).newValue))\n| extend\n    AppId = tostring(parse_json(parse_json(InitiatedBy).app).appId),\n    InitiatedByDisplayName = tostring(parse_json(parse_json(InitiatedBy).app).displayName),\n    ServicePrincipalId = tostring(parse_json(parse_json(InitiatedBy).app).servicePrincipalId),\n    ServicePrincipalName = tostring(parse_json(parse_json(InitiatedBy).app).servicePrincipalName)\n| where DisplayName =~ \"Role.WellKnownObjectName\" and GroupName in~ (PrivilegedGroups)\n// If you want to still alert for operations from PIM, remove below filtering for MS-PIM.\n| where InitiatedByDisplayName != \"MS-PIM\"\n// | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName\n| extend timestamp = TimeGenerated, AccountCustomEntity = ServicePrincipalName\n| project\n    SourceSystem,\n    TimeGenerated,\n    AADOperationType,\n    Category,\n    OperationName,\n    ResourceId,\n    GroupName,\n    InitiatedBy,\n    TargetResources,\n    modifiedProperties\n| extend InitiatedBy_userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n| extend InitiatedBy_userPrincipalName_Username = trim_end(@\"\\@.+\", InitiatedBy_userPrincipalName)\n| extend InitiatedBy_ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n| extend Target_userPrincipalName = tostring(TargetResources.userPrincipalName)\n| extend Target_userPrincipalName_Username = trim_end(@\"\\@.+\", Target_userPrincipalName)\n//Join Identity info\n| join kind=inner IdentityInfo_ on $left.Target_userPrincipalName == $right.AccountUPN \n//Get user context\n| extend UserContext_ = strcat(\"User context: \", AccountDisplayName, \" - Department: \", Department, \" - Title: \", JobTitle)//\" - Manager: \",Manager) //Custom field for user context\n| project-away InitiatedBy, TargetResources, modifiedProperties // cleaning the projection ",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P8D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1098",
+                    "T1078"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "4d94d4a9-dc96-410a-8dea-4d4d4584188b",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

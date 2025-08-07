@@ -1,0 +1,104 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e757bfa4-1e62-4782-81aa-f64112bb277a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e757bfa4-1e62-4782-81aa-f64112bb277a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Browser Cache Smuggling",
+                "description": "This attack technique (browser cache smuggling) involves an attacker hosting a webpage which forces a user to download potentially malicous content (dlls) within the user's cache on their windows drive in the background. The Firefox and Chrome cache should normally not have any DLLs executed or processes spawning so anything executed from this folder path would be deemed suspicious.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Analytic Rule Name: Browser Cache Smuggling\r\n//\r\n// Contributor: James Kim, Dawinder Singh\r\n// Source: N/A\r\n// Reviewer: Vivian Tran\r\n//\r\n// Description: This attack technique (browser cache smuggling) involves an attacker hosting a webpage which forces a user to download potentially malicous content (dlls) within the user's cache on their windows drive in the background. The Firefox cache should normally not have any DLLs being executed so anything executed from this folder path would be deemed suspicious\r\n//\r\n// Handling Guidance:\r\n// Step 1: Look at the resulting process or processes following the execution of the cached browser item.\r\n// Step 2: Isolate users device as it may be potentially compromised. It is not common to see users executing items from the cache.\r\n// Step 3: Investigate the network logs to find the malicious Firefox site and pay attention to the URI in the AdditionalFields column and block it via Checkpoint or Zscaler\r\n//\r\n//Reference: https://sensepost.com/blog/2023/browsers-cache-smuggling/\r\n//\r\n// Change notes\r\n// ------------\r\n// 11/30/23 James Kim - Initial Version\r\n//\r\n//Query:\r\nlet ProcessExecution = DeviceProcessEvents\r\n| where (FolderPath has @\"default-release\\cache2\\entries\" and FolderPath has @\"AppData\\Local\\Mozilla\\Firefox\\Profiles\") or (FolderPath has @\"AppData\\Local\\Google\\Chrome\\User Data\\Default\\Cache\\Cache_Data\")\r\n| project TimeGenerated, DeviceName, InitiatingProcessAccountName, ProcessCommandLine, FolderPath, InitiatingProcessCommandLine;\r\nDeviceImageLoadEvents\r\n| where (FolderPath has @\"default-release\\cache2\\entries\" and FolderPath has @\"AppData\\Local\\Mozilla\\Firefox\\Profiles\") or (FolderPath has @\"AppData\\Local\\Google\\Chrome\\User Data\\Default\\Cache\\Cache_Data\")\r\n| join DeviceFileEvents on FileName\r\n| join DeviceProcessEvents on InitiatingProcessCommandLine\r\n| project TimeGenerated, DeviceName, InitiatingProcessAccountName, FileName, FolderPath, InitiatingProcessCommandLine, InitiatingProcessFileName, AdditionalFields, ActionType, SpawnedFrom = InitiatingProcessFileName1, ResultingProcess = ProcessCommandLine\r\n| union ProcessExecution",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1027"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDescriptionFormat": "This attack technique (browser cache smuggling) involves an attacker hosting a webpage which forces a user to download potentially malicous content (dlls) within the user's cache on their windows drive in the background. The Firefox and Chrome cache should normally not have any DLLs executed or processes spawning, so anything executed from this folder path would be deemed suspicious.\n\nThe file {{FileName}} located under: {{FolderPath}} spawned the process {{ResultingProcess}} \n\nHandling Guidance:\nStep 1: Look at the resulting process or processes following the execution of the cached browser item.\nStep 2: Isolate users device as it may be potentially compromised. It is not common to see users executing items from the cache.\nStep 3: Investigate the network logs to find the malicious Firefox site and pay attention to the URI in the AdditionalFields column and block it via Checkpoint or Zscaler",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            },
+                            {
+                                "identifier": "Directory",
+                                "columnName": "FolderPath"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ResultingProcess"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

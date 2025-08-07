@@ -1,0 +1,66 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7be773d2-2d51-4412-898a-a25feac8afe1')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7be773d2-2d51-4412-898a-a25feac8afe1')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Azure Monitor- Removing of a Resource Lock-Medium",
+                "description": "Description: This query identifies when someone removes a resource lock from an azure resource which can be an indicator of compromise \n Handling Guidance: 1. Reach out to the user, which is under \"Actor/Caller\" and investigate why they are performing these actions. 2. If necessary involve their manager in the conversation. ",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Author: Samer Takieldin\r\n//Source: N/A\r\n//Reviewer: Samer Takieldin\r\n//Description: This query identifies when someone removes a resource lock which can be an idicator of compromise \r\n//Handling guidance: Reach out to the user, which is under \"Actor/Caller\" and investigate why they are performing these actions. If necessary involve their manager in the conversation\r\n//\r\nAzureActivity\r\n| where OperationNameValue == \"MICROSOFT.AUTHORIZATION/LOCKS/DELETE\"\r\n| where ActivityStatusValue == \"Success\"\r\n| extend Activity = case(OperationNameValue == \"MICROSOFT.AUTHORIZATION/LOCKS/DELETE\", strcat(\"Resource Lock Removed\"),\r\n    \"unknown\")\r\n| extend ResourceGroup = tostring(parse_json(Properties).resourceGroup)\r\n| extend AzureResource = tostring(parse_json(Properties).resourceProviderValue)\r\n| extend x = tostring(parse_json(Properties).resource)\r\n| parse x with ResourceName \"/\" *\r\n| parse x with * \"microsoft.authorization/\" LockName\r\n| project\r\n    TimeGenerated,\r\n    CallerIpAddress,\r\n    Activity,\r\n    ResourceName,\r\n    Caller,\r\n    ['Azure Resource']=AzureResource,\r\n    ['Azure Subscription Id']=SubscriptionId,\r\n    ['Azure Resource Group']=ResourceGroup,\r\n    LockName",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "UserIdentityArn": "ResourceName",
+                    "EventName": "Activity",
+                    "SourceIPAddress": "CallerIpAddress"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
