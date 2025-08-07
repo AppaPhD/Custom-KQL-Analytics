@@ -1,0 +1,62 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f04ecdfa-6af2-46a3-aab2-156f97c8cf56')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f04ecdfa-6af2-46a3-aab2-156f97c8cf56')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "NRT",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Add-Tenant-Allow/Block-List-Entry",
+                "description": "generate an alert when any IOC events happen",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Contributor: Samuel Liu\r\n// Description: Analytic rule that activates a logic app when an alert is received\r\n// 2024/10/07 - Evgeniy Cralev - Updated the Parameters field parsing to dynamically extend all JSON into columns, and created more reliable Expiration Date conditions\r\nOfficeActivity\r\n| where Operation == \"New-TenantAllowBlockListItems\"\r\n| extend ParsedParams = parse_json(Parameters)\r\n| mv-apply ParamItem = ParsedParams on (       // Expand the array into multiple rows\r\n    summarize dynamic_bag = make_bag(pack(tostring(ParamItem.Name), tostring(ParamItem.Value)))  // Create a bag of key-value pairs\r\n)\r\n| evaluate bag_unpack(dynamic_bag)\r\n| extend SubmissionUserId = todynamic(column_ifexists(\"SubmissionUserId\", \"\")), // extend dynamically parsed fields\r\n         ModifiedBy = todynamic(column_ifexists(\"ModifiedBy\", \"\")),\r\n         ExpirationDate = todynamic(column_ifexists(\"ExpirationDate\", \"\")),\r\n         RemoveAfter = todynamic(column_ifexists(\"RemoveAfter\", \"\")),\r\n         Block = todynamic(column_ifexists(\"Block\", \"\")),\r\n         ListType = todynamic(column_ifexists(\"ListType\", \"\")),\r\n         Entries = todynamic(column_ifexists(\"Entries\", \"\")),\r\n         Notes = todynamic(column_ifexists(\"Notes\", \"\")),\r\n         NoExpiration = todynamic(column_ifexists(\"NoExpiration\", \"\"))\r\n| extend Submitter = iff(isempty(column_ifexists(\"SubmissionUserId\", \"\")), iff(isempty(column_ifexists(\"ModifiedBy\", \"\")), UserId, ModifiedBy), SubmissionUserId)\r\n| extend Block = coalesce(Block, \"False\")\r\n| extend ExpirationDate = case(\r\n                         isnotempty(ExpirationDate),\r\n                         todatetime(ExpirationDate),\r\n                         isnotempty(RemoveAfter),\r\n                         datetime_add('day', toint(RemoveAfter), TimeGenerated),\r\n                         datetime(null)\r\n                         )\r\n| extend ListType = case(\r\n                         ListType == \"Sender\" and Entries contains \"@\",\r\n                         \"Email Address\",\r\n                         ListType == \"Sender\" and Entries !contains \"@\",\r\n                         \"Email Domain\",\r\n                         ListType == \"Url\",\r\n                         \"URL\",\r\n                         \"Unknown\"\r\n                     )\r\n| project-away TenantId, RecordType, Operation, OrganizationId, OrganizationId_, UserType, UserKey, OfficeWorkload, ResultStatus, ResultReasonType, UserId, UserId_, ClientIP, ClientIP_, Parameters, ExternalAccess, OriginatingServer, OrganizationName, OfficeId, SourceRecordId, OfficeTenantId, OfficeTenantId_, AppId, ClientAppId, AppPoolName, Type, ParsedParams, ModifiedBy, SubmissionUserId",
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "Entry": "Entries",
+                    "Submitter": "Submitter",
+                    "Timestamp": "TimeGenerated",
+                    "Block": "Block",
+                    "Expiration": "ExpirationDate",
+                    "Comment": "Notes",
+                    "ItemType": "ListType",
+                    "NoExpiration": "NoExpiration"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

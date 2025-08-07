@@ -1,0 +1,98 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/744f4b66-d49a-436b-b5c0-93c39a971c67')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/744f4b66-d49a-436b-b5c0-93c39a971c67')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Active Directory - Suspicious LDAP Recon (Bloodhound)",
+                "description": "Detect when an actor is running a LDAP query that has a wildcard to discover all the user accounts with a SPN.\n\nSource: https://m365internals.com/2021/05/22/how-to-hunt-for-ldap-reconnaissance-within-m365-defender/ \n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: LT \r\n// Reviewer: Obadiah\r\n// Reference: https://m365internals.com/2021/05/22/how-to-hunt-for-ldap-reconnaissance-within-m365-defender/\r\n//\r\n// Description: \r\n// Handling Guidance: \r\n//\r\n// Change notes\r\n// ------------\r\n// 06/08/23 Obadiah Bridges - updated boilerplate, added description & handling guidance\r\n//\r\n// Description: Detect when an actor is running a LDAP query that has a wildcard to discover all the user accounts with a SPN.\r\n// Handling guidance: \r\n//\r\n//\r\n// Known false positives: \r\n//\r\n// Query:\r\nlet timeframe = 1d;\r\nlet ldap_filter = dynamic([\r\n//Below, we enumerate suspicious LDAP filters that are characteristic of recon activity. \r\n//Source: https://techcommunity.microsoft.com/t5/microsoft-defender-for-endpoint/hunting-for-reconnaissance-activities-using-ldap-search-filters/ba-p/824726\r\n\"servicePrincipalName=*\",\r\n\"description=*pass*\",\r\n\"(&(sAMAccountType=805306369)(dnshostname=*))\", //Get-NetComputer - Powerview\r\n\"(&(samAccountType=805306368)(samAccountName=*)\", //Get-NetUser - Powerview\r\n\"(&(samAccountType=805306368)(servicePrincipalName=*)\", //Get-NetUser SPNs - Powerview\r\n\"(&(objectClass=group))\",  //enum ad groups - metasploit\r\n\"(&(objectCategory=computer)(operatingSystem=*server*))\", //enum ad computers\r\n\"(&(&(objectCategory=person)(objectClass=user))(|(description=*pass*)(comment=*pass*)))\" //enum ad user comments for password\r\n\"(samAccountType=805306368)\",\r\n\"(objectcategory=group)(samaccountname=*admin*)\", //find all groups containing the word admin\r\n\"(groupType:1.2.840.113556.1.4.803:=2147483650))\", //Find all global security groups\r\n\"(UserAccountControl:1.2.840.113556.1.4.803:=32))\" //find user accounts with no password required\r\n]); // Wildcard search to find user accounts with a SPN\r\nDeviceEvents\r\n| where TimeGenerated >= ago(timeframe)\r\n| where ActionType == 'LdapSearch'\r\n| extend LDAP = parse_json(AdditionalFields)\r\n| extend AttributeList = LDAP.AttributeList\r\n| extend SearchFilter = LDAP.SearchFilter\r\n| extend DistinguishName = LDAP.DistinguishedName\r\n| where SearchFilter has_any (ldap_filter)\r\n| project TimeGenerated, DeviceName, SearchFilter, DistinguishName, AttributeList, InitiatingProcessFolderPath, InitiatingProcessCommandLine, InitiatingProcessAccountUpn",
+                "queryFrequency": "PT30M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1033",
+                    "T1087"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountUpn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "InitiatingProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessFolderPath"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

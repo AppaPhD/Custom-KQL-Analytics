@@ -1,0 +1,74 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/70eec0ba-f3bc-4603-aab1-ac48b173d9dd')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/70eec0ba-f3bc-4603-aab1-ac48b173d9dd')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Add Canarytoken Domains to UNBL",
+                "description": "This is a query that will run once a day and populate the newest domains from the Canarytoken alerts and will then create an OPCN ticket.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Contributor: Anthony Edelstein\r\n// Reviewer: \r\n// Reference:\r\n//\r\n// Description: This query will identify the Source URL associated with a Canarytoken alert. \r\n// Handling Guidance: \r\n//\r\n// Change notes\r\n// ------------\r\n// 8/27/2024 Initiial version of query.\r\nThinkstCanary_CL\r\n| where Description_s has \"Azure Entra Login Canarytoken triggered\"\r\n| parse AdditionalDetails_s with * '\"Referer\",\"' Url '\"]' *\r\n| distinct  Url\r\n| extend URL = extract(@'://(.*)', 1, Url)\r\n| project URL",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "ResourceDevelopment",
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1586",
+                    "T1566"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "URL"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

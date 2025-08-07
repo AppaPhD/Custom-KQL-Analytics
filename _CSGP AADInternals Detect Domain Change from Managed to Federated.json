@@ -1,0 +1,88 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a944873a-2110-424d-8bcc-039137f1aff6')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a944873a-2110-424d-8bcc-039137f1aff6')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AADInternals Detect Domain Change from Managed to Federated",
+                "description": "AADInternals use, where we see a domain changed from managed to federated, and the issuer contains any.sts or the issuer suffix is 8 characters, a combination of letters and numbers\n\nHandling Guidance:\n1. Verify that the activity is not normal, as in if this is happening for the first time ever in a while\n2. Reach out to confirm if they did this themselves\n3. Find which app is being federated, if it is sensitive, make sure to escalate immediately",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Anthony Edelstein\r\n// Reviewer: Samuel Liu\r\n// Reference: https://github.com/reprise99/Sentinel-Queries/blob/main/Defender%20for%20Cloud%20Apps/DCA-DetectAADInternalsUse.kql\r\n//\r\n// Description: AADInternals use, where we see a domain changed from managed to federated, and the issuer contains any.sts or the issuer suffix is 8 characters, a combination of letters and numbers\r\n// Handling Guidance: \r\n//\r\n// Change notes\r\n// ------------\r\n// 11/17/2023 -- Original Version  - Anthony Edelstein\r\nCloudAppEvents\r\n| where ActionType == \"Set domain authentication.\"\r\n| extend Actor = tostring(RawEventData.UserId)\r\n| extend mp=parse_json(RawEventData.ModifiedProperties)\r\n| extend DomainName = tostring(parse_json(tostring(RawEventData.Target))[0].ID)\r\n| mv-apply mp on (\r\nwhere mp.Name == \"IssuerUri\"\r\n| extend Issuer=mp.NewValue\r\n)\r\n| extend mp=parse_json(RawEventData.ModifiedProperties)\r\n| mv-apply mp on (\r\nwhere mp.Name == \"LiveType\"\r\n| extend OldDomainType = mp.OldValue\r\n| extend NewDomainType = mp.NewValue\r\n)\r\n| project TimeGenerated, Actor, DomainName, OldDomainType, NewDomainType, Issuer\r\n| parse Issuer with * @'://' Issuer @'\"' *\r\n| extend IssuerSuffix = split(Issuer, '/')[-1]\r\n| where OldDomainType has \"Managed\" and NewDomainType has \"Federated\"\r\n| where Issuer has \"any.sts\" or IssuerSuffix matches regex \"^[a-zA-Z0-9]{8}$\"",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution"
+                ],
+                "techniques": [
+                    "T1651"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Actor"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Issuer"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DomainName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

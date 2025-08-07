@@ -1,0 +1,84 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e846296f-baf0-4ae2-8952-29ba39e67485')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e846296f-baf0-4ae2-8952-29ba39e67485')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: 2nd IdP Added",
+                "description": "This rule detects when a second Identity Provider (IdP) is added.\n\nHandling Guidance: immediately escalate to the IAM team to identify if the additional IdP is expected.  Do not contact the InitiatingUser first, if they're adding a second IdP, they might be compromised.\n\nReference: https://ermetic.com/blog/cloud/the-mgm-breach-and-the-role-of-idp-in-modern-cyber-attacks/",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Adrian Shina\r\n// Reviewer: Lucas Trainer, Samuel Liu\r\n// Reference: https://ermetic.com/blog/cloud/the-mgm-breach-and-the-role-of-idp-in-modern-cyber-attacks/\r\n//\r\n// Description: This rule detects when a second Identity Provider (IdP) is added.\r\n// Handling Guidance: immediately escalate to the IAM team to identify if the additional IdP is expected.  Do not contact the InitiatingUser first, if they're adding a second IdP, they might be compromised.\r\n//\r\n// Change notes\r\n// ------------\r\n//\r\nAuditLogs\r\n| where OperationName in (\"Add identity provider\", \"Update identity provider\")\r\n| project TimeGenerated, OperationName, InitiatingUser = tostring(parse_json(InitiatedBy).user.userPrincipalName)",
+                "queryFrequency": "PT30M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1098"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDescriptionFormat": "Description: This rule detects when a second Identity Provider (IdP) is added.\nHandling Guidance: immediately escalate to the IAM team to identify if the additional IdP is expected.  Do not contact the InitiatingUser first, if they're adding a second IdP, they might be compromised.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "OperationName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "InitiatingUser"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

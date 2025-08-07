@@ -1,0 +1,62 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/96d042b9-8dfd-45d3-b64a-74eb8498e744')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/96d042b9-8dfd-45d3-b64a-74eb8498e744')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: ADPASSHUNT Detection",
+                "description": "This IOC detects indicators associated with the ADPassHunt Tool. This tool is used to hunt for AD credentials and used via execute-assembly that looks for passwords in GPP, Autoruns and AD objects.  \nT1003.003, T1552.006\nRemove next filter when too many false positives",
+                "severity": "Low",
+                "enabled": true,
+                "query": "//https://github.com/fireeye/red_team_tool_countermeasures/blob/master/rules/ADPASSHUNT/production/hxioc/ADPASSHUNT (CREDENTIAL STEALER).ioc\n//\n// This is a brittle detection - it would no longer succeeed if ADPassHunt.exe is renamed, for example to ADPassSearch. \n//\n// This IOC detects indicators associated with the ADPassHunt Tool. This tool is used to hunt for AD credentials and used via execute-assembly that looks for passwords in GPP, Autoruns and AD objects.  \n// T1003.003, T1552.006\n// Contributor: \n// Source:  \n// Reviewer: \n//\n// Description:\n// Handling Guidance:\n//\n// Query:\n// Remove next filter when too many false positives\nlet StartedProcess=DeviceProcessEvents\n    | where FileName =~ \"ADPassHunt.exe\"\n    | where InitiatingProcessFileName contains \"powershell\"\n    | extend CleanProcessCommandLine=parse_command_line(tostring(ProcessCommandLine), \"windows\")\n    | where CleanProcessCommandLine has_any (\"-dc\", \"-domain\", \"-action\", \"start\", \"gpp\", \"ad\");\nDeviceEvents\n| where DeviceId in ((StartedProcess\n    | project DeviceId)) and InitiatingProcessFileName in ((StartedProcess\n    | project FileName))",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess",
+                    "ResourceDevelopment"
+                ],
+                "techniques": [
+                    "T1552",
+                    "T1588"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

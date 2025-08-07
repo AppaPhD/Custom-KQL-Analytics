@@ -1,0 +1,96 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/121e3796-0dda-4063-a613-6f836138ce85')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/121e3796-0dda-4063-a613-6f836138ce85')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Active Directory: CentralAuth Privileged Group Modified",
+                "description": "User group costarcollection-centralauthentication-edit or costarcollection-centralauthentication-admin membership was modified \n\nHandling Guidance: Search Jira to see if a ticket has been created / approved for this group membership change. If there is no ticket, notify GRC and post a message in the DevOps channel in teams. Tag @DevOpsLeaders in the teams post. ",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: Daniel Maisano \r\n// Source: NA\r\n//References: https://servicedesk.costargroup.com/browse/SCSP-98234\r\n// Reviewer: Lucas Trainer\r\n//\r\n// Description: This alert identifies when a change has been made to AD groups that grant sensitive privileges in CentralAuth. These changes have compliance implications and should be documented and approved with a corresponding ticket. If there is not a ticket for this change, it needs to be escalated to GRC and DevOps.\r\n// Handling Guidance: Search Jira to see if a ticket has been created / approved for this group membership change. If there is no ticket, notify GRC and post a message in the DevOps channel in teams. Tag @DevOpsLeaders in the teams post. \r\n//\r\n// Query:\r\nlet sensitiveGroups_ = dynamic([\"costarcollection-centralauthentication-edit\", \"costarcollection-centralauthentication-admin\"]);\r\nIdentityDirectoryEvents\r\n| where ActionType == \"Group Membership changed\"\r\n| extend GroupName_ = tostring(AdditionalFields.[\"TO.GROUP\"])\r\n| where GroupName_ has_any (sensitiveGroups_)\r\n| extend Description_ = strcat(\"CentralAuth Sensitive Group Membership Modified: \",\r\n\"\\n\",\"Group: \", GroupName_,\r\n\"\\n\", \"User: \", TargetAccountDisplayName, \r\n\"\\n\", \"Changed by: \", AccountName)\r\n| project\r\n    TimeGenerated,\r\n    Description_,\r\n    TargetAccountDisplayName,\r\n    TargetAccountUpn,\r\n    GroupName_,\r\n    ChangedBy=AccountName,\r\n    ActionType",
+                "queryFrequency": "PT2H",
+                "queryPeriod": "PT2H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1098"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Active Directory: Sensitive Group Modified - CentralAuth  {{GroupName_}}",
+                    "alertDescriptionFormat": "{{Description_}}\n<br>\n<br>\nDescription: This alert identifies when a change has been made to AD groups that grant sensitive privileges in CentralAuth. These changes have compliance implications and should be documented and approved with a corresponding ticket. If there is not a ticket for this change, it needs to be escalated to GRC and DevOps.\n<br>\n<br>\nAccount: {{TargetAccountDisplayName}} cahnged by: {{ChangedBy}}\n<br>\n<br>\nHanding Guidance: Search Jira to see if a ticket has been created / approved for this group membership change. If there is no ticket, notify GRC and post a message in the DevOps channel in teams. Tag @DevOpsLeaders in the teams post. ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "TargetAccountUpn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "SecurityGroup",
+                        "fieldMappings": [
+                            {
+                                "identifier": "DistinguishedName",
+                                "columnName": "GroupName_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "ChangedBy"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

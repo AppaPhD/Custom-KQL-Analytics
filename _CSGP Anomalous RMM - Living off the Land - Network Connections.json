@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/2405efc6-06c6-41d4-ba95-9416380e7cc0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/2405efc6-06c6-41d4-ba95-9416380e7cc0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: Anomalous RMM - Living off the Land - Network Connections",
+        "description": "This strategy identifies unauthorized RMM tools such as QuickAssist, AnyDesk, and TeamViewer through behavioral and signature-based analysis of network events, process execution, and file system artifacts. Known allowed tools and their respective executable paths are excluded to reduce false positives.\n\nHandling Guidance:\nIsolate Device: Immediately isolate the affected device to prevent lateral movement.\nContact User: Determine if the RMM tool installation was legitimate. If unauthorized, proceed with escalation.\nInvestigate:\nReview logs for execution chains and associated accounts.\nAnalyze network connections to identify potential C2 or secondary infections.\nContainment and Eradication:\nRemove unauthorized tools.\nBlock related URLs/IPs.",
+        "severity": "Low",
+        "enabled": true,
+        "query": "// Contributor: Anthony Edelstein & Lucas Trainer\n// Reviewer: \n// Reference:First part based on tweet by: @Antonlovesdnb https://x.com/Antonlovesdnb/status/1840823846720385482\n//\n// Description: Detects the use of RMM tools. Unauthorized RMM tools such as QuickAssist, AnyDesk, TeamViewer, Level, or ScreenConnect are an early indicator in ransomware campaigns and can be used to maintain stealthy persistence. They may also be coupled with use of secondary C2 via OpenSSH to establish a reverse shell. \n// Handling Guidance: Contact the user. Identify how and why the RMMM tool was installed on the device. Isolate the device if appropriate and begin IR escalation. \n// \n// References: https://www.rapid7.com/blog/post/2024/12/04/black-basta-ransomware-campaign-drops-zbot-darkgate-and-custom-malware/\n//\n// Change notes\n// ------------\n// 12/3/2024 -- Original Version boilerplate, reference, description, TTP. - Anthony Edelstein\n// 2/4/2025 -- Excluded ngrok and Auvik (as well as Syncro) which is a DataDog Agent. aedelstein\n// 2/12/25 -- Excluded Parallels Access to allowedRMM_Name, this is an approved licensed software - Anthony Edelstein\n// 2/19/25 -- Excluded PuTTY, this is an approved licensed software and we already excluded \"Solar-PuTTY\" - James Kim\n// 3/28/25 -- Re-removed Ngrok as it is no loger allowed and removed Parallels as it's not approved in the Ledger and now has a cve- https://costar-group-prod-dev.atlassian.net/browse/SEC-13869. Added vulnerabilites and installation path to output. Excluded Kabuto and Syncro as these appear to be required tools. - Anthony Edelstein\n// First part based on tweet by: @Antonlovesdnb https://x.com/Antonlovesdnb/status/1840823846720385482\n//Begin Exclusions\nlet AllowedRMM_Name = dynamic([\"WinSCP\", \"Datadog Agent\", \"Auvik\", \"Insight Agent\", \"Opera Installer\", \"Autodesk Installer\", \"Opera GX Installer\", \"Egnyte WebEdit\", \"Microsoft RDP\", \"Royal TS\", \"Rapid7\", \"Microsoft TSC\", \"mstsc\", \"PuTTY\", \"GoTo Opener\", \"Parallels Client\", \"mRemoteNG\", \"Chrome Remote Desktop\", \"CTES\", \"Absolute Persistence Agent\", \"Solar-PuTTY\", \"Absolute (Computrace)\", \"Syncro\", \"Kabuto\", \"Qlik\", \"Runner\"]);//add RMM name here to be excluded\nlet AllowedRMM_executable = dynamic([\"rapid7_endpoint_broker.exe\", \"mstsc.exe\", \"royalts.exe\", \"rapid7_agent_core.exe\", \"winscp.exe\", \"server.exe\", \"bomgar-scc.exe\"]);//exclude app by exe name\nlet AllowedRMM_executablePath = dynamic([\"c:\\\\program files\\\\rapid7\\\\insight agent\\\\ir_agent.exe\"]);\nlet AllowedRMM_commandLine = dynamic([\"Opera\"]);\nlet LOLRMM = externaldata(Name:string,Category:string,Description:string,Author:string,Date:datetime,LastModified:datetime,Website:string,Filename:string,OriginalFileName:string,PEDescription:string,Product:string,Privileges:string,Free:string,Verification:string,SupportedOS:string,Capabilities:string,\nVulnerabilities:string,InstallationPaths:string,Artifacts:string,Detections:string,References:string,Acknowledgement:string)[@\"https://lolrmm.io/api/rmm_tools.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet ParsedExecutables = LOLRMM\n    | distinct InstallationPaths, Vulnerabilities\n    | extend FileNames = extract_all(@\"\\b([a-zA-Z0-9 _-]+\\.exe)\", InstallationPaths)\n    | mv-expand FileNames\n    | where isnotempty(FileNames)\n    | project FileNames = tolower(FileNames), Vulnerabilities, InstallationPaths\n    | distinct FileNames, Vulnerabilities, InstallationPaths;\nDeviceNetworkEvents\n| where tolower(InitiatingProcessFileName) in (ParsedExecutables)\n| where ActionType == \"ConnectionSuccess\"\n| where not (ipv4_is_private(RemoteIP))\n| where not(InitiatingProcessVersionInfoProductName has_any (AllowedRMM_Name))\n| where not(InitiatingProcessFileName has_any (AllowedRMM_executable))\n| where not(InitiatingProcessFolderPath has_any (AllowedRMM_executablePath))\n| where not(InitiatingProcessCommandLine has_any (AllowedRMM_commandLine))\n| summarize TotalEvents = count(), ExecutableCount = dcount(InitiatingProcessFileName), Executables = make_set(InitiatingProcessVersionInfoInternalFileName) by DeviceName, DeviceId, InitiatingProcessVersionInfoProductName, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessAccountName",
+        "queryFrequency": "PT2H",
+        "queryPeriod": "PT2H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": ["InitialAccess"],
+        "techniques": ["T0886"],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Anomalous RMM - Living off the Land - Network Connections",
+          "alertDescriptionFormat": "Handling Guidance:\n(1) Isolate Device: Immediately isolate the affected device to prevent lateral movement.\n(2) Contact User: Determine if the RMM tool installation was legitimate.  How was the RMM installed and why? If unauthorized, proceed with escalation.\n(3)Investigate:\nReview logs for execution chains and associated accounts.\nAnalyze network connections to identify potential C2 or secondary infections.\n(4) Containment and Eradication:\nRemove unauthorized tools.\nBlock related URLs/IPs.\nPost-Incident Actions: Update allowlists or detection logic if new legitimate tools are identified.\n\nDescription: Detects the use of RMM tools. Unauthorized RMM tools such as QuickAssist, AnyDesk, TeamViewer, Level, or ScreenConnect are an early indicator in ransomware campaigns and can be used to maintain stealthy persistence. They may also be coupled with use of secondary C2 via OpenSSH to establish a reverse shell. ",
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": [{"entityType":"Malware","fieldMappings":[{"identifier":"Name","columnName":"InitiatingProcessVersionInfoProductName"}]},{"entityType":"Host","fieldMappings":[{"identifier":"FullName","columnName":"DeviceName"}]}],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}
