@@ -1,0 +1,79 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/3d968881-26f4-4ded-a19a-4fb7bf6f9bc7')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/3d968881-26f4-4ded-a19a-4fb7bf6f9bc7')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Suspicious number of resource creation or deployment activities",
+                "description": "Indicates when an anomalous number of VM creations or deployment activities occur in Azure via the AzureActivity log.\nThe anomaly detection identifies activities that have occured both since the start of the day 1 day ago and the start of the day 7 days ago.\nThe start of the day is considered 12am UTC time.\n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let szOperationNames = dynamic([\"Create or Update Virtual Machine\", \"Create Deployment\"]);\nlet starttime = 7d;\nlet endtime = 1d;\nAzureActivity\n| where TimeGenerated between (startofday(ago(starttime)) .. startofday(ago(endtime)))\n| where OperationName in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), \nOperationIds = makelist(OperationId), CallerIpAddress = makelist(CallerIpAddress), CorrelationId = makelist(CorrelationId) \nby ResourceId, Caller, OperationName, Resource, ResourceGroup\n| mvexpand CallerIpAddress\n| where isnotempty(CallerIpAddress)\n| make-series dResourceCount=dcount(ResourceId)  default=0 on StartTimeUtc in range(startofday(ago(7d)), now(), 1d) \nby Caller, tostring(ActivityTimeStamp), tostring(ActivityStatus), tostring(OperationIds), tostring(CallerIpAddress), tostring(CorrelationId), ResourceId, OperationName, Resource, ResourceGroup\n| extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)\n| where Slope > 0.2\n| join kind=leftsemi (\n// Last day's activity is anomalous\nAzureActivity\n| where TimeGenerated >= startofday(ago(endtime))\n| where OperationName in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatus = makelist(ActivityStatus), \nOperationIds = makelist(OperationId), CallerIpAddress = makelist(CallerIpAddress), CorrelationId = makelist(CorrelationId) \nby ResourceId, Caller, OperationName, Resource, ResourceGroup\n| mvexpand CallerIpAddress\n| where isnotempty(CallerIpAddress)\n| make-series dResourceCount=dcount(ResourceId)  default=0 on StartTimeUtc in range(startofday(ago(1d)), now(), 1d) \nby Caller, tostring(ActivityTimeStamp), tostring(ActivityStatus), tostring(OperationIds), tostring(CallerIpAddress), tostring(CorrelationId), ResourceId, OperationName, Resource, ResourceGroup\n| extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)\n| where Slope > 0.2    \n) on Caller, CallerIpAddress        \n| mvexpand todynamic(ActivityTimeStamp), todynamic(ActivityStatus), todynamic(OperationIds), todynamic(CorrelationId)\n| extend timestamp = ActivityTimeStamp, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P7D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1496"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "361dd1e3-1c11-491e-82a3-bb2e44ac36ba",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": null
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

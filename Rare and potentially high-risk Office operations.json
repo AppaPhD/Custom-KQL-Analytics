@@ -1,0 +1,81 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ef5d98af-330d-4790-946c-2ca533d7a37d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ef5d98af-330d-4790-946c-2ca533d7a37d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Rare and potentially high-risk Office operations",
+                "description": "Identifies Office operations that are typically rare and can provide capabilities useful to attackers.\n\na_ accounts and SpoolsProvisioning-ApplicationAccount@namprd14.prod.outlook.com are excluded\n\nsvcO365Scripter@costar.com also excluded as hourly script runs to check for new SMBs and populate its delegation \n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Low",
+                "enabled": false,
+                "query": "let timeframe = 1d;\nOfficeActivity\n| where UserId !contains \"a_\" \n| where UserId !contains \"SpoolsProvisioning-ApplicationAccount@namprd14.prod.outlook.com\"\n| where UserId !contains \"svcO365Scripter@costar.com\"\n| where TimeGenerated >= ago(timeframe)\n| where Operation in~ (\"Add-MailboxPermission\", \"Add-MailboxFolderPermission\", \"Set-Mailbox\", \"New-ManagementRoleAssignment\")\n    and not(UserId has_any ('NT AUTHORITY\\\\SYSTEM (Microsoft.Exchange.ServiceHost)', 'devilfish-applicationaccount') and Operation in~ (\"Add-MailboxPermission\", \"Set-Mailbox\"))\n| where parse_json(Parameters)[2].Name <> ```DeliverToMailboxAndForward```\n| where parse_json(Parameters)[1].Name <> ```ForwardingSmtpAddress```\n| extend\n    timestamp = TimeGenerated,\n    AccountCustomEntity = UserId,\n    IPCustomEntity = ClientIP",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "Collection"
+                ],
+                "techniques": [
+                    "T1098",
+                    "T1114"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "957cb240-f45d-4491-9ba5-93430a3c08be",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

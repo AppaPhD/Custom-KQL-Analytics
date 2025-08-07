@@ -1,0 +1,72 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5f6a6561-07ad-4b02-8545-09e5d6d1c5c3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5f6a6561-07ad-4b02-8545-09e5d6d1c5c3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Sign-ins from IPs that attempt sign-ins to disabled accounts",
+                "description": "Identifies IPs with failed attempts to sign in to one or more disabled accounts signed in successfully to another account.\nReferences: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\n50057 - User account is disabled. The account has been disabled by an administrator. \n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let lookBack = 1d;\nSigninLogs \n| where TimeGenerated >= ago(lookBack)\n| where ResultType == \"50057\" \n| where ResultDescription == \"User account is disabled. The account has been disabled by an administrator.\" \n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), disabledAccountLoginAttempts = count(), \n    disabledAccountsTargeted = dcount(UserPrincipalName), applicationsTargeted = dcount(AppDisplayName), disabledAccountSet = makeset(UserPrincipalName), \n    applicationSet = makeset(AppDisplayName)\n    by IPAddress\n// Only alert if multiple accounts attempted sign-ins - change by jkesterson 6/18/21\n| where disabledAccountsTargeted > 1\n| order by disabledAccountLoginAttempts desc\n| join kind=inner (\n    // Consider these IPs suspicious - and alert any related  successful sign-ins\n    SigninLogs\n    | where TimeGenerated >= ago(lookBack)\n    | where ResultType == 0\n    | summarize successfulAccountSigninCount = dcount(UserPrincipalName), successfulAccountSigninSet = makeset(UserPrincipalName, 15) by IPAddress\n    // Assume IPs associated with sign-ins from 100+ distinct user accounts are safe\n    | where successfulAccountSigninCount < 100\n    )\n    on IPAddress  \n// IPs from which attempts to authenticate as disabled user accounts originated, and had a non-zero success rate for some other account\n| where successfulAccountSigninCount != 0\n//Exclude DC/Richmond public subnets to filter out noise - change by jkesterson 3/31/21\n| where ipv4_is_match(IPAddress, \"4.34.97.144/28\") == false and ipv4_is_match(IPAddress, \"4.28.226.152/29\") == false and ipv4_is_match(IPAddress, \"4.28.226.80/28\") == false\n//Next two lines filter out phone auto-retries to teams, office, onedrive - change by jkesterson 4/19/21\n| where dynamic(['Microsoft Teams', 'Microsoft Office', 'OneDrive SyncEngine', 'Apple Internet Accounts']) !contains todynamic(applicationSet)\n| project StartTimeUtc, EndTimeUtc, IPAddress, disabledAccountLoginAttempts, disabledAccountsTargeted, disabledAccountSet, applicationSet, \n    successfulAccountSigninCount, successfulAccountSigninSet\n| order by disabledAccountLoginAttempts\n| extend timestamp = StartTimeUtc, IPCustomEntity = IPAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1098"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "500c103a-0319-4d56-8e99-3cec8d860757",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

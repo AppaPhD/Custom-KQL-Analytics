@@ -1,0 +1,64 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/75426a1e-e5b8-48d2-bc3f-a18505ba51a2')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/75426a1e-e5b8-48d2-bc3f-a18505ba51a2')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "GRC: Terminated Users Being Re-enabled",
+                "description": "GRC automated alert to send email for accounts being re-enabled",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "let lookback = 2h;\nIdentityDirectoryEvents\n| where TimeGenerated > ago(lookback) //need to manually override time range, this can be synced to how often the detection gets run\n| where ActionType has \"Account enabled\"\n| where isnotempty(TargetAccountDisplayName)\n| extend TargetAccountSid = tostring(AdditionalFields.TargetAccountSid)\n| summarize arg_max(TimeGenerated, *) by TargetAccountSid //look for most recent entry\n| join kind=leftouter (IdentityInfo\n    | where TimeGenerated > ago(lookback)\n    | summarize arg_max(TimeGenerated, *) by EmployeeId\n    | extend IsContractor = iff(OnPremisesDistinguishedName has \"OU=Contractors\", true, false))\n    on $left.TargetAccountSid == $right.AccountSID //join on immutable SID\n| join kind=inner ( //join inner to only return overlapping results\n    _GetWatchlist('Workday_SOX_Terminations')\n    | extend AccountUPN = tostring(split(WorkEmail, \"999\")[0]) //normalizing UPN\n    | where SOXTermDate <> \"n/a\")\n    on $left.EmployeeId == $right.EmployeeID\n| project-away EmployeeId, _DTItemId, SearchKey, WorkEmail\n| project-reorder TargetAccountDisplayName, EmployeeID, Username, AccountUPN, SOXTermDate, TargetAccountSid, IsContractor",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT20M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "ActorUPN": "AccountDisplayName",
+                    "TargetUPN": "AccountUPN",
+                    "EmployeeID": "EmployeeID",
+                    "Timestamp": "Timestamp",
+                    "TargetFullName": "TargetAccountDisplayName"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

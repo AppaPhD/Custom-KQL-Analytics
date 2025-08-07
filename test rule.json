@@ -1,0 +1,67 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"workspace": {
+			"type": "String"
+		}
+	},
+	"resources": [
+		{
+			"id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6afb03b9-961f-4ee7-aeb8-23db36e2e37d')]",
+			"name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6afb03b9-961f-4ee7-aeb8-23db36e2e37d')]",
+			"type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+			"kind": "Scheduled",
+			"apiVersion": "2023-12-01-preview",
+			"properties": {
+				"displayName": "test rule",
+				"description": "This is a test. Adding an extra bit in the description.",
+				"severity": "Medium",
+				"enabled": false,
+				"query": "// Analytic Rule Name: _DEV: cmd.exe with services.exe as parent process\n//\n// Author: Mohamed Elgendy\n// Source: https://redcanary.com/blog/blue-mockingbird-cryptominer/, https://car.mitre.org/analytics/CAR-2014-05-002/\n// Reviewer:\n//\n// Description: Returns all processes named cmd.exe that have services.exe as a parent process.\n//\n// Windows runs the Service Control Manager (SCM) within the process services.exe. Windows launches services as independent \n// processes or DLL loads within a svchost.exe group. To be a legitimate service, a process (or DLL) must have the appropriate \n// service entry point SvcMain. If an application does not have the entry point, then it will timeout (default is 30 seconds)\n// and the process will be killed. Services are a convenient way for an adversary to gain Persistence and Privilege Escalation.\n//\n// Handling guidance: Determine if the activity is legitimate by looking at the host name and the account name. \n// \n// MITRE ATT&CK Reference: https://attack.mitre.org/techniques/T1543/\n// Change notes\n// ------------\n// 06/07/23 Obadiah Bridges - updated boilerplate. promoted to CSGP. \n//\n// Query \nDeviceProcessEvents\n| where FileName == \"cmd.exe\" and InitiatingProcessFileName == \"services.exe\"\n//test comment\n| extend Hostname = trim_end(@\"\\..+\",DeviceName)",
+				"queryFrequency": "PT5H",
+				"queryPeriod": "PT5H",
+				"triggerOperator": "GreaterThan",
+				"triggerThreshold": 0,
+				"suppressionDuration": "PT5H",
+				"suppressionEnabled": false,
+				"startTimeUtc": null,
+				"tactics": [],
+				"techniques": [],
+				"subTechniques": [],
+				"alertRuleTemplateName": null,
+				"incidentConfiguration": {
+					"createIncident": false,
+					"groupingConfiguration": {
+						"enabled": false,
+						"reopenClosedIncident": false,
+						"lookbackDuration": "PT5H",
+						"matchingMethod": "AllEntities",
+						"groupByEntities": [],
+						"groupByAlertDetails": [
+							"DisplayName",
+							"Severity"
+						],
+						"groupByCustomDetails": [
+							"abc",
+							"xyz"
+						]
+					}
+				},
+				"eventGroupingSettings": {
+					"aggregationKind": "SingleAlert"
+				},
+				"alertDetailsOverride": {
+					"alertDynamicProperties": []
+				},
+				"customDetails": {
+					"abc": "AccountUpn",
+					"xyz": "AccountSid"
+				},
+				"entityMappings": null,
+				"sentinelEntitiesMappings": null,
+				"templateVersion": null
+			}
+		}
+	]
+}
