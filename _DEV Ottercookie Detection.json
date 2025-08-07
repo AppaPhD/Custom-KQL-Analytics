@@ -1,0 +1,116 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/45c1e7c7-70eb-4fe9-8c80-6b547bbbe76d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/45c1e7c7-70eb-4fe9-8c80-6b547bbbe76d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_DEV: Ottercookie Detection",
+        "description": "Description: Detect potential OtterCookie malware behavior characterized by the creation of archive files followed by outbound HTTP connections to a suspicious port (1224) associated with exfiltration to U.S.-based IP addresses.\nHandling Guidance: \n1. Immediate Actions:\n    - Isolate the host if the behavior is not explainable by expected business activity.\n    - Retrieve and inspect the archive file.\n2. Investigate:\n    - Determine the full command line for the process and its parent.\n    - Analyze the destination IP reputation and ownership.\n    - Check for signs of lateral movement or other signs of staging.\n3. Containment:\n    - Block suspicious IPs and ports at the network level.\n    - Revoke compromised credentials, if applicable.\n4. Post-Incident:\n    - Add known legitimate sources to allowlists to reduce future false positives.\n    - Update rules to monitor for similar behavior across other compression utilities.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "// Contributor: Adrian Shina\n// Reviewer: Samuel Liu\n// Reference: https://any.run/cybersecurity-blog/ottercookie-malware-analysis/\n//\n// Description: Detect potential OtterCookie malware behavior characterized by the creation of archive files followed by outbound HTTP connections to a suspicious port (1224) associated with exfiltration to U.S.-based IP addresses.\n//\n// Handling Guidance: \n// 1. Immediate Actions:\n//     - Isolate the host if the behavior is not explainable by expected business activity.\n//     - Retrieve and inspect the archive file.\n// 2. Investigate:\n//     - Determine the full command line for the process and its parent.\n//     - Analyze the destination IP reputation and ownership.\n//     - Check for signs of lateral movement or other signs of staging.\n// 3. Containment:\n//     - Block suspicious IPs and ports at the network level.\n//     - Revoke compromised credentials, if applicable.\n// 4. Post-Incident:\n//     - Add known legitimate sources to allowlists to reduce future false positives.\n//     - Update rules to monitor for similar behavior across other compression utilities.\n//\n// Change notes\n// ------------\n// 06/06/25 Adrian Shina - Initial version\n//\nlet CompressionTools = dynamic([\"tar\",\"zip\",\"gzip\"]);\nlet CompressData =\n    DeviceFileEvents\n    | where ActionType == \"FileCreated\"\n    | where InitiatingProcessFileName has_any (CompressionTools)\n    | distinct DeviceName;\nDeviceNetworkEvents\n| where ActionType == \"HttpConnectionInspected\"\n| where parse_json(AdditionalFields)[\"direction\"] == 'Out'\n| where parse_json(AdditionalFields)[\"status_code\"] == '200'\n| extend GeoCtry = tostring(geo_info_from_ip_address(RemoteIP).country)\n| where GeoCtry == \"United States\"\n| where RemotePort == \"1224\"\n| where DeviceName has_any(CompressData)\n| project TimeGenerated, DeviceName, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessFolderPath, InitiatingProcessCommandLine, RemoteUrl, RemoteIP, RemotePort",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "CommandAndControl",
+          "Collection"
+        ],
+        "techniques": [
+          "T1071",
+          "T1560"
+        ],
+        "subTechniques": [
+          "T1071.001"
+        ],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "DeviceName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingProcessAccountName"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "identifier": "Directory",
+                "columnName": "InitiatingProcessFolderPath"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingProcessFileName"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "RemoteUrl"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "RemoteIP"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

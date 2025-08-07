@@ -1,0 +1,84 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/df23b145-ae59-4d95-8aac-e2eedd79bcaf')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/df23b145-ae59-4d95-8aac-e2eedd79bcaf')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_TUNE: Attempt to bypass conditional access rule in Azure AD",
+                "description": "Identifies an attempt to Bypass conditional access rule(s) in Azure Active Directory.\nThe ConditionalAccessStatus column value details if there was an attempt to bypass Conditional Access\nor if the Conditional access rule was not satisfied (ConditionalAccessStatus == 1).\nReferences: \nhttps://docs.microsoft.com/azure/active-directory/conditional-access/overview\nhttps://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins\nhttps://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\nConditionalAccessStatus == 0 // Success\nConditionalAccessStatus == 1 // Failure\nConditionalAccessStatus == 2 // Not Applied\nConditionalAccessStatus == 3 // unknown",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// This rule needs tuning - use a watchlist with costar external IPs\n//filter where IP is not in watchlist\nlet timeRange = ago(1d);\nlet threshold = 1;\nSigninLogs\n| where TimeGenerated >= timeRange\n| where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ \"failure\"\n| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser \n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend ConditionalAccessPol0Name = tostring(ConditionalAccessPolicies[0].displayName)\n| extend ConditionalAccessPol1Name = tostring(ConditionalAccessPolicies[1].displayName)\n| extend ConditionalAccessPol2Name = tostring(ConditionalAccessPolicies[2].displayName)\n| extend Status = strcat(StatusCode, \": \", ResultDescription) \n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Status = makelist(Status), StatusDetails = makelist(StatusDetails), IPAddresses = makelist(IPAddress), IPAddressCount = dcount(IPAddress) , CorrelationIds = makelist(CorrelationId) by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), Location, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name\n| where IPAddressCount > threshold and StatusDetails !has \"MFA successfully completed\"\n| mvexpand IPAddresses, Status, StatusDetails, CorrelationIds\n| extend Status = strcat(Status, \" \", StatusDetails)\n| summarize IPAddresses = makeset(IPAddresses), Status = makeset(Status), CorrelationIds = makeset(CorrelationIds) by StartTimeUtc, EndTimeUtc, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), Location, ConditionalAccessPol0Name, ConditionalAccessPol1Name, ConditionalAccessPol2Name, IPAddressCount\n| extend timestamp = StartTimeUtc, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses), Reason_Failed = Status[0]",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 3,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1098"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "3af9285d-bb98-4a35-ad29-5ea39ba0c628",
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Attempt to bypass conditional access rule in Azure AD from {{AccountCustomEntity}}",
+                    "alertDescriptionFormat": "Attempt to bypass conditional access rule in Azure AD generated at {{timestamp}}\n{{AccountCustomEntity}}:{{Reason_Failed}}"
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

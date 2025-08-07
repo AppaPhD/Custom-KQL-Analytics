@@ -1,0 +1,90 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/636f93ba-2906-4c95-ba1b-2d5bd04dceef')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/636f93ba-2906-4c95-ba1b-2d5bd04dceef')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_DEV: Suspicious File Read",
+        "description": "Correlates multiple suspicious activities with a sensitive file read.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "// Contributor: Sky Tran\n// Reviewer: Grover Mewborn\n//\n// Description: Detects anomalous net.exe usage through a risk scoring system and alerts based on events grouping and average risk score/frequency.\n//\n// Change notes\n// ------------\n// 06/12/25 Sky Tran - initial query\n//\nlet exclusions = dynamic([\"xpdagent.exe\", \"devenv.exe\", \"ssms.exe\", \"aspnet_compiler.exe\", \"msbuild.exe\", \"w3wp.exe\", \"selfservice.exe\", \"receiver.exe\", \"vbcscompiler.exe\", \"csc.exe\", \"powertoys.powerlauncher.exe\", \"jetbrains.dpa.ide.vs.backend.exe\", \"arcgispro.exe\", \"mtm64.exe\", \"mpdlpservice.exe\", \"microsoft.mashup.container.netfx45.exe\", '', \"mrt.exe\", \"rider64.exe\", \"iisexpress.exe\"]);\nlet clr = (\n    DeviceEvents\n    | where ActionType == \"ClrUnbackedModuleLoaded\"\n    | where InitiatingProcessAccountDomain != \"SenseCM.exe\"\n    | where InitiatingProcessAccountUpn != '' and InitiatingProcessAccountUpn !startswith \"sql\"\n    | where InitiatingProcessFileName !in (exclusions) and InitiatingProcessFileName !contains \"Citrix\" and InitiatingProcessFileName !has \"ServiceHub\"\n    | where InitiatingProcessAccountUpn !startswith \"svc\"\n    | project time1 = TimeGenerated, DeviceName, InitiatingProcessFileName, InitiatingProcessCommandLine, AccountName\n);\nlet sensitive = ( \n    DeviceEvents\n    | where ActionType == \"SensitiveFileRead\"\n    | where InitiatingProcessAccountName !startswith \"svc\" and InitiatingProcessAccountName !startswith \"sql\"\n    | where InitiatingProcessFileName !in (exclusions)\n    | where not(InitiatingProcessCommandLine contains \"chef\" and InitiatingProcessFileName == \"ruby.exe\")\n    | where InitiatingProcessCommandLine !contains \"vsc\" and InitiatingProcessCommandLine !contains \"VBCS\" and InitiatingProcessCommandLine !has \"CRM.Client\"\n    | project time2 = TimeGenerated, DeviceName, InitiatingProcessFileName, InitiatingProcessCommandLine, AccountName, FileName\n);\nlet smb = (\n    DeviceNetworkEvents\n    | where AdditionalFields contains \"SMB\" or RemotePort in (\"445\", \"139\", \"137\", \"138\") // covers all SMB ports and ephemeral ports using SMB\n    | where ActionType == \"ConnectionSuccess\"\n    | where InitiatingProcessFileName != \"ntoskrnl.exe\" and InitiatingProcessFileName != \"microsoft.tri.sensor.exe\"\n    | where InitiatingProcessCommandLine != \"zpa-connector-child\" and InitiatingProcessCommandLine != \"vbcscompiler.exe\"\n    | project time3 = TimeGenerated, DeviceName, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessAccountName\n);\nclr\n| join kind=inner sensitive on DeviceName\n    | where abs(datetime_diff(\"minute\", time1, time2)) <= 30\n| join kind=inner smb on DeviceName\n    | where abs(datetime_diff(\"minute\", time1, time3)) <= 30\n| extend \n    start_time = min_of(time1, time2, time3),\n    end_time = max_of(time1, time2, time3)\n| summarize \n    commands1 = make_set_if(InitiatingProcessCommandLine, isnotempty(InitiatingProcessCommandLine)),\n    commands2 = make_set_if(InitiatingProcessCommandLine1, isnotempty(InitiatingProcessCommandLine1)),\n    start_time = min(start_time),\n    end_time = max(end_time)\n    by DeviceName, InitiatingProcessFileName, InitiatingProcessFileName1\n| extend \n    processes = strcat(InitiatingProcessFileName, \", \", InitiatingProcessFileName1),\n    commands = array_concat(commands1, commands2)\n| project start_time, end_time, DeviceName, processes, commands",
+        "queryFrequency": "PT5H",
+        "queryPeriod": "PT5H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "Execution",
+          "CommandAndControl",
+          "LateralMovement"
+        ],
+        "techniques": [
+          "T1059",
+          "T1071",
+          "T1105",
+          "T1021"
+        ],
+        "subTechniques": [
+          "T1059.005",
+          "T1071.002",
+          "T1021.002"
+        ],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {
+          "Processes": "processes",
+          "DeviceName": "DeviceName",
+          "StartTime": "start_time",
+          "EndTime": "end_time"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "ElevationToken",
+                "columnName": "commands"
+              },
+              {
+                "identifier": "CommandLine",
+                "columnName": "commands"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

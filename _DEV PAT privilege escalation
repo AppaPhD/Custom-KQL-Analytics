@@ -1,0 +1,97 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6898e8cf-f86e-4337-bd47-66b15d8d5230')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6898e8cf-f86e-4337-bd47-66b15d8d5230')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_DEV: PAT privilege escalation",
+                "description": "This detects when a user uses a Personal Access Token is used to escalate their own privileges. This is not typical\n\nHandling Guidance: \n1. Check what privileges are escalated and if they are expected or not\n2. reach out to user and confirm activity",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Conditions: Assuming there is a C2 beacon on a device, the ip detials and configurations are all around the same as a normal company domain joined device. (One of our own)\r\n// Theories:\r\n// 1. if the OperationName is Git.RefUpdatePoliciesBypassed -> this could mean that an attacker is pushing malware into our repos and bypassing the pipeline checks\r\n// 2. if the user is elevating their own permissions, this is suspicious behavior\r\n// Observations: These are the only one we usually see\r\n  // Git.RefUpdatePoliciesBypassed\r\n  // Security.ModifyPermission\r\n  // Security.ModifyAccessControlLists\r\n// Allowlisted UPNs should likely stay empty\r\nlet AllowlistedUpns = datatable(UPN:string)['SvcTFSServicePrd@costar.com']; //not sure this is needed long term\r\n// Operation Name parts that will alert\r\nlet HasAnyBlocklist = datatable(OperationNamePart:string)['Security.','Project.','AuditLog.','Extension.'];\r\n// Distinct Operation Names that will flag\r\nlet HasExactBlocklist = datatable(OperationName:string)['Group.UpdateGroupMembership.Add','Library.ServiceConnectionExecuted','Pipelines.PipelineModified',\r\n'Release.ReleasePipelineModified', 'Git.RefUpdatePoliciesBypassed'];\r\nlet costar_ips = \r\n    (_GetWatchlist('Costar_Public_IP_Ranges') \r\n    | summarize make_list(SearchKey));\r\nAzureDevOpsAuditing\r\n// | where TimeGenerated > ago(200d)\r\n| where AuthenticationMechanism startswith \"PAT\" and (OperationName has_any (HasAnyBlocklist) or OperationName in (HasExactBlocklist))\r\n  and ActorUPN !in (AllowlistedUpns)\r\n| project-reorder TimeGenerated, AuthenticationMechanism, ProjectName, ActorUPN, ActorDisplayName, IpAddress, UserAgent, OperationName, Details, Data\r\n| extend RepoName = tostring(Data.RepoName)\r\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix = tostring(split(ActorUPN, \"@\")[1])\r\n| where Details has ActorDisplayName //theory: if a user is escalating their own privileges, it could be an indicator of malicious behavior\r\n// | summarize make_set(Details), count() by ActorUPN, IpAddress, ProjectName, RepoName, OperationName, UserAgent, AuthenticationMechanism",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "DisplayName",
+                                "columnName": "ActorDisplayName"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "ActorUPN"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "AuthenticationMechanism"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "Details"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

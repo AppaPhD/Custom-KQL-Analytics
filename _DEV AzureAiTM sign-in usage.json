@@ -1,0 +1,92 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/795e632e-6113-4576-80ad-096ef1d80d2a')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/795e632e-6113-4576-80ad-096ef1d80d2a')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT5H",
+        "queryPeriod": "PT5H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPAddress"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "Email"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "sentinelEntitiesMappings": [
+          {
+            "columnName": "AppDisplayName"
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "InitialAccess",
+          "DefenseEvasion",
+          "CredentialAccess"
+        ],
+        "techniques": [
+          "T1566",
+          "T1078",
+          "T1111",
+          "T1557",
+          "T1528"
+        ],
+        "subTechniques": [
+          "T1566.002",
+          "T1078.004"
+        ],
+        "displayName": "_DEV: AzureAiTM sign-in usage",
+        "enabled": true,
+        "description": "Calls out the usage of AzureAiTM. This should NEVER be used by legitimate users and indicates successful adversary credential harvesting.",
+        "alertRuleTemplateName": null,
+        "query": "// Contributor: Sky Tran\n// Reviewer: Nixy Camacho & Evgeniy Cralev\n//\n// Description: Calls out the usage of AzureAiTM. This should NEVER be used by legitimate users and indicates successful adversary credential harvesting.\n//\n// Change notes\n// ------------\n// 06/23/25 Sky Tran - initial query\n// 06/24/25 Sky Tran - separated email/UPN columns and fixed time bins\n//\nlet AzureIPInfo = externaldata(changeNumber: int, cloud: string, values: dynamic)[h\"https://stsecopsn01.blob.core.windows.net/watchlists/ServiceTags_Public_20240311.json\"] with (format = 'multijson')\n    | project-away changeNumber, cloud\n    | mv-expand parse_json(values)\n    | extend Name = values.name\n    | extend AddressPrefixes = values.properties.addressPrefixes\n    | extend Platform = values.properties.platform\n    | summarize make_list(AddressPrefixes);\nSigninLogs\n| where DeviceDetail.trustType == ''\n| where ipv4_is_in_any_range(IPAddress, toscalar(AzureIPInfo))\n| extend ConfidenceScoreNetwork = iif(NetworkLocationDetails == '[]', 1.0, 0.1)\n| extend ConfidenceScoreApp = iif(AppDisplayName =~ 'OfficeHome', 1.0, 0.75)\n| extend ConfidenceScore = ConfidenceScoreApp * ConfidenceScoreNetwork\n| where ConfidenceScore > 0.75\n| distinct \n    TimeGenerated,\n    UserPrincipalName,\n    UserAgent,\n    AppDisplayName,\n    IPAddress,\n    ConfidenceScore,\n    RiskDetail\n| extend TimeBin = format_datetime(bin(TimeGenerated, 15m), 'MM/dd/yyyy HH:mm:ss')\n| summarize \n    Email = maxif(UserPrincipalName, UserPrincipalName contains \"@\"),\n    UPN = maxif(UserPrincipalName, UserPrincipalName !contains \"@\"),\n    TimeBins = min(TimeBin)\n  by UserAgent, AppDisplayName, IPAddress\n| project TimeBins, Email, UPN, UserAgent, AppDisplayName, IPAddress"
+      }
+    }
+  ]
+}

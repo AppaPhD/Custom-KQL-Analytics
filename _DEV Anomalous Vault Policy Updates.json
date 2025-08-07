@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/08f9b0a4-3fe5-4537-bd02-7beeacb6b1c8')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/08f9b0a4-3fe5-4537-bd02-7beeacb6b1c8')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_DEV: Anomalous Vault Policy Updates",
+        "description": "Reference: https://costar-group-prod-dev.atlassian.net/browse/SEC-14368\nRelevant Workbook(s): N/A\n\nDescription: This detection is looking back at 2 weeks for updates to vault policies and seeing the patterns to compare to current logs. Consistency indicates the expected behavior of the actions. If actions are being taken by unusual users and at unusual times, we should know and triage. This will run in the background to collect information.\nHandling Guidance: N/A\nReach-out Template: N/A",
+        "severity": "Informational",
+        "enabled": true,
+        "query": "let bucketSize = 4h;\nlet enrich_prd = (\nVaultEntAuditLogs_prd_CL\n| where TimeGenerated > ago(14d)\n| where request_mount_point_s startswith \"sys\" and request_path_s startswith \"sys/policies\" and type_s == \"request\" and request_path_s != \"sys/policies/acl/dr-secondary-promotion\"\n| summarize RequestPaths = make_set(request_path_s) by auth_entity_id_g, request_path_s, request_operation_s, auth_metadata_service_account_name_s, auth_identity_policies_s, auth_policies_s, auth_token_type_s, auth_token_ttl_d, request_remote_address_s, bin(TimeGenerated, bucketSize)\n| extend TimeGeneratedString = format_datetime(todatetime(TimeGenerated),\"M/d/yyyy, h:mm:ss:fff tt\")\n| extend TimeGeneratedString = tostring(TimeGenerated));\nlet oidc_login_UserIDs_prd = (VaultEntAuditLogs_prd_CL\n| where not(isempty(response_auth_display_name_s)) and request_mount_point_s == \"auth/oidc/\" and not(isempty(response_auth_display_name_s))\n| project-rename oidc_timestamp = TimeGenerated); \nlet prd = (VaultEntAuditLogs_prd_CL\n| where TimeGenerated > ago(14d)\n| where request_mount_point_s startswith \"sys\" and request_path_s startswith \"sys/policies\" and type_s == \"request\" and request_path_s != \"sys/policies/acl/dr-secondary-promotion\" //excluding disaster recovery because of noise\n| make-series Events=count(), default=0 on TimeGenerated in range(ago(14d), now(), bucketSize) by auth_entity_id_g, auth_metadata_service_account_name_s\n| summarize EventCount=make_list(Events, 1000), TimeGenerated=make_list(TimeGenerated, 1000) by auth_entity_id_g, auth_metadata_service_account_name_s\n| extend (outliers, score, baseline) = series_decompose_anomalies(EventCount, 1.5, 6, \"linefit\")\n| mv-expand TimeGenerated, EventCount to typeof(long), outliers, baseline to typeof(long), score to typeof(double)\n| where outliers > 0 and todatetime(TimeGenerated) > ago(14d) \n| extend TimeGeneratedString = format_datetime(todatetime(TimeGenerated),\"M/d/yyyy, h:mm:ss:fff tt\")\n| extend TimeGeneratedString = tostring(TimeGenerated)\n| extend vault = \"VaultEntAuditLogs_prd_CL\"\n| join kind=inner enrich_prd on auth_entity_id_g, auth_metadata_service_account_name_s, TimeGeneratedString //enrich logs from same time period\n| join kind=inner oidc_login_UserIDs_prd on auth_entity_id_g //correlate with oidc logins\n| order by EventCount\n| project-reorder TimeGeneratedString, oidc_timestamp);\nlet enrich_dev = (\nVaultEntAuditLogs_dev_CL\n| where TimeGenerated > ago(14d)\n| where request_mount_point_s startswith \"sys\" and request_path_s startswith \"sys/policies\" and type_s == \"request\" and request_path_s != \"sys/policies/acl/dr-secondary-promotion\"\n| summarize RequestPaths = make_set(request_path_s) by auth_entity_id_g, request_path_s, request_operation_s, auth_metadata_service_account_name_s, auth_identity_policies_s, auth_policies_s, auth_token_type_s, auth_token_ttl_d, request_remote_address_s, bin(TimeGenerated, bucketSize)\n| extend TimeGeneratedString = format_datetime(todatetime(TimeGenerated),\"M/d/yyyy, h:mm:ss:fff tt\")\n| extend TimeGeneratedString = tostring(TimeGenerated));\nlet oidc_login_UserIDs_dev = (VaultEntAuditLogs_dev_CL\n| where not(isempty(response_auth_display_name_s)) and request_mount_point_s == \"auth/oidc/\" and not(isempty(response_auth_display_name_s))\n| project-rename oidc_timestamp = TimeGenerated); \nlet dev = (VaultEntAuditLogs_dev_CL\n| where TimeGenerated > ago(14d)\n| where request_mount_point_s startswith \"sys\" and request_path_s startswith \"sys/policies\" and type_s == \"request\" and request_path_s != \"sys/policies/acl/dr-secondary-promotion\" //excluding disaster recovery because of noise\n| make-series Events=count(), default=0 on TimeGenerated in range(ago(14d), now(), bucketSize) by auth_entity_id_g, auth_metadata_service_account_name_s\n| summarize EventCount=make_list(Events, 1000), TimeGenerated=make_list(TimeGenerated, 1000) by auth_entity_id_g, auth_metadata_service_account_name_s\n| extend (outliers, score, baseline) = series_decompose_anomalies(EventCount, 1.5, 6, \"linefit\")\n| mv-expand TimeGenerated, EventCount to typeof(long), outliers, baseline to typeof(long), score to typeof(double)\n| where outliers > 0 and todatetime(TimeGenerated) > ago(14d) \n| extend TimeGeneratedString = format_datetime(todatetime(TimeGenerated),\"M/d/yyyy, h:mm:ss:fff tt\")\n| extend TimeGeneratedString = tostring(TimeGenerated)\n| extend vault = \"VaultEntAuditLogs_dev_CL\"\n| join kind=inner enrich_dev on auth_entity_id_g, auth_metadata_service_account_name_s, TimeGeneratedString //enrich logs from same time period\n| join kind=inner oidc_login_UserIDs_dev on auth_entity_id_g //correlate with oidc logins\n| order by EventCount\n| project-reorder TimeGeneratedString, oidc_timestamp);\nlet enrich_tst = (\nVaultEntAuditLogs_tst_CL\n| where TimeGenerated > ago(14d)\n| where request_mount_point_s startswith \"sys\" and request_path_s startswith \"sys/policies\" and type_s == \"request\" and request_path_s != \"sys/policies/acl/dr-secondary-promotion\"\n| summarize RequestPaths = make_set(request_path_s) by auth_entity_id_g, request_path_s, request_operation_s, auth_metadata_service_account_name_s, auth_identity_policies_s, auth_policies_s, auth_token_type_s, auth_token_ttl_d, request_remote_address_s, bin(TimeGenerated, bucketSize)\n| extend TimeGeneratedString = format_datetime(todatetime(TimeGenerated),\"M/d/yyyy, h:mm:ss:fff tt\")\n| extend TimeGeneratedString = tostring(TimeGenerated));\nlet oidc_login_UserIDs_tst = (VaultEntAuditLogs_tst_CL\n| where not(isempty(response_auth_display_name_s)) and request_mount_point_s == \"auth/oidc/\" and not(isempty(response_auth_display_name_s))\n| project-rename oidc_timestamp = TimeGenerated); \nlet tst = (VaultEntAuditLogs_tst_CL\n| where TimeGenerated > ago(14d)\n| where request_mount_point_s startswith \"sys\" and request_path_s startswith \"sys/policies\" and type_s == \"request\" and request_path_s != \"sys/policies/acl/dr-secondary-promotion\" //excluding disaster recovery because of noise\n| make-series Events=count(), default=0 on TimeGenerated in range(ago(14d), now(), bucketSize) by auth_entity_id_g, auth_metadata_service_account_name_s\n| summarize EventCount=make_list(Events, 1000), TimeGenerated=make_list(TimeGenerated, 1000) by auth_entity_id_g, auth_metadata_service_account_name_s\n| extend (outliers, score, baseline) = series_decompose_anomalies(EventCount, 1.5, 6, \"linefit\")\n| mv-expand TimeGenerated, EventCount to typeof(long), outliers, baseline to typeof(long), score to typeof(double)\n| where outliers > 0 and todatetime(TimeGenerated) > ago(14d) \n| extend TimeGeneratedString = format_datetime(todatetime(TimeGenerated),\"M/d/yyyy, h:mm:ss:fff tt\")\n| extend TimeGeneratedString = tostring(TimeGenerated)\n| extend vault = \"VaultEntAuditLogs_tst_CL\"\n| join kind=inner enrich_tst on auth_entity_id_g, auth_metadata_service_account_name_s, TimeGeneratedString //enrich logs from same time period\n| join kind=inner oidc_login_UserIDs_tst on auth_entity_id_g //correlate with oidc logins\n| order by EventCount\n| project-reorder TimeGeneratedString, oidc_timestamp);\nlet all_tables=(union prd, dev, tst);\nall_tables\n| where TimeGenerated > ago(1d)\n| project TimeGenerated, vault, response_auth_display_name_s, auth_entity_id_g, request_path_s, request_operation_s, request_headers_user_agent_s, cluster_s, request_mount_point_s, request_request_uri_s, vault_s",
+        "queryFrequency": "P1D",
+        "queryPeriod": "P14D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "PrivilegeEscalation",
+          "DefenseEvasion",
+          "Persistence"
+        ],
+        "techniques": [
+          "T1078",
+          "T1222",
+          "T1098"
+        ],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": false,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {
+          "VaultEnvironment": "vault",
+          "RequestPath": "request_path_s",
+          "UserAgent": "request_headers_user_agent_s",
+          "Action": "request_operation_s"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "response_auth_display_name_s"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c34ce1a2-ea25-46a2-9932-5906d23bb69c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c34ce1a2-ea25-46a2-9932-5906d23bb69c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_DEV: Potential Enumeration in Log Analytics Workspace",
+        "description": "This rule analyzes the Log Analytics workspace to attempt to uncover enumeration activity by searching through non redacted log data. This rule excludes members of the Security team. \n \nHandling Guidance: \n1. Identify the user involved and their department/role. This query will ideally identify new/uncommon users \n2. Analyze the average time of the queries run, a higher time indicates broader searches for more data \n3. Investigate the content of queries that were run or execute them yourself to view what results were returned \n4. Upon suspected compromise, mark the user as high risk and revoke sign in sessions \n5. The log analytics workspace can only be accessed by device connected to the network, identify what device the user was on and isolate it",
+        "severity": "Low",
+        "enabled": true,
+        "query": "// Contributor: James Kim \n// Reviewer: \n// \n// Description: This rule analyzes the Log Analytics workspace to attempt to uncover enumeration activity by searching through non redacted log data. This rule excludes members of the Security team. \n// \n// Handling Guidance: \n// 1. Identify the user involved and their department/role. This query will ideally identify new/uncommon users \n// 2. Analyze the average time of the queries run, a higher time indicates broader searches for more data \n// 3. Investigate the content of queries that were run or execute them yourself to view what results were returned \n// 4. Upon suspected compromise, mark the user as high risk and revoke sign in sessions \n// 5. The log analytics workspace can only be accessed by device connected to the network, identify what device the user was on and isolate it \n// \n// Change notes \n// ------------ \n// 06/26/25 James Kim - Initial version \n//\nlet sensitiveKeywords = dynamic([\"password\", \"secret\", \"token\", \"key\", \"connectionstring\"]); //common strings to search for within the text\nlet identity = IdentityInfo\n    | where TimeGenerated > ago(4d)\n    | summarize arg_max(TimeGenerated, *) by AccountUPN\n    | extend UserRisk = strcat(RiskLevel, ':', RiskState)\n    | extend UserRisk = iff(UserRisk == ':' or UserRisk == 'None:Remediated', 'None', UserRisk)\n    | project AccountUPN, Department, JobTitle, UserRisk;\nLAQueryLogs\n| where RequestClientApp == \"AppAnalytics\"\n| where QueryText !startswith \"LAQueryLogs\"\n| where QueryText !has \"Description:\" and QueryText !has \"Handling guidance:\" //do not include analytic rules being run\n| where QueryText !has \"4724 - An attempt was made to reset an account\"\n| where QueryText !has \"summarize arg_max(TimeGenerated, *\"\n| where QueryText matches regex @\"^\\s*search\\s+\" //common broad searches\n    or QueryText has \"| where *\"\n    or QueryText has_any (sensitiveKeywords)\n| extend ResponseTimeSeconds = todouble(ResponseDurationMs) / 1000\n| extend findAccount = iff(AADEmail startswith \"a_\" or AADEmail startswith \"0_\", tostring(split(AADEmail, \"_\")[1]), AADEmail)\n| join kind=leftouter identity on $left.findAccount == $right.AccountUPN\n| where Department !has \"Security\" //exclude security team members\n| where JobTitle !has \"Security\"\n| where JobTitle !has \"GRC\"\n| where AADEmail !has \"aolfati@costar.com\" //exclude Azzi - expected user\n| extend HourBin = bin(TimeGenerated, 1h)\n| summarize\n    QueryCount = count(),\n    AvgQueryTime = strcat(tostring(avg(ResponseTimeSeconds)), \"s\"),\n    QueriesRun = make_list(QueryText, 100)\n    by\n    HourBin,\n    User = AADEmail,\n    Department,\n    JobTitle,\n    UserRisk\n| order by HourBin desc, QueryCount desc",
+        "queryFrequency": "P1D",
+        "queryPeriod": "P1D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "Reconnaissance",
+          "Discovery"
+        ],
+        "techniques": [
+          "T1590",
+          "T1591",
+          "T1082",
+          "T1613",
+          "T1580"
+        ],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "User"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

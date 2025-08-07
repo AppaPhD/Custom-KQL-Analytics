@@ -1,0 +1,83 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d01960aa-0e90-4440-8a40-49c2c310e510')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d01960aa-0e90-4440-8a40-49c2c310e510')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_DEV: Anomalous use of net.exe",
+        "description": "Detects anomalous net.exe usage through a risk scoring system and alerts based on events grouping and average risk score/frequency.Handling Guidance:\n// 1. Investigate the commands run and determine the intended purpose\n//     - What is the scope of the command? (local machine or active directory)\n//     - What is the purpose of the command? (enumeration, group changes, etc)\n// 2. Based on risk score, determine next actions. \n//     - Is this something that could potentially be expected activity?\n//     - Confirm suspicious activity with the user. \n//     - Check for signs of lateral movement. \n// 3. Correlate with other alerts and validate user/system context. \n//     - If malicious, isolate the host, reset credentials, and block IOCs.\n//     - Document findings and escalate per response procedures. ",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "// Contributor: Sky Tran\n// Reviewer: James Kim\n//\n// Description: Detects anomalous net.exe usage through a risk scoring system and alerts based on events grouping and average risk score/frequency.\n//\n// Handling Guidance:\n// 1. Investigate the commands run and determine the intended purpose\n//     - What is the scope of the command? (local machine or active directory)\n//     - What is the purpose of the command? (enumeration, group changes, etc)\n// 2. Based on risk score, determine next actions. \n//     - Is this something that could potentially be expected activity?\n//     - Confirm suspicious activity with the user. \n//     - Check for signs of lateral movement. \n// 3. Correlate with other alerts and validate user/system context. \n//     - If malicious, isolate the host, reset credentials, and block IOCs.\n//     - Document findings and escalate per response procedures. \n//\n// Change notes\n// ------------\n// 06/04/25 Sky Tran - initial query\n// 06/09/25 Sky Tran - added _DEV prefix, boilerplate, added some tuning, added some more tolerance to non-AD activity.\n//\nDeviceProcessEvents\n| where FileName =~ \"net.exe\" or FileName =~ \"net1.exe\"\n| where ProcessCommandLine has_any (\n    \"user\", \"group\", \"localgroup\", \"start\", \"stop\", \"share\", \"use\", \"view\", \"session\"\n)\n| where (\n    ProcessCommandLine has_any (\"/add\", \"/delete\", \"/active:\", \"/expires:never\", \"/passwordreq:no\") or // account manipulation\n    (ProcessCommandLine has_any (\"start\", \"stop\") and \n     ProcessCommandLine has_any (\"Defender\", \"WinDefend\", \"MpsSvc\", \"wscsvc\", \"Sense\")) or // security service manipulation\n    ProcessCommandLine matches regex @\"(?i)^.*(\"\"net(\\.exe)?\"\"|net(\\.exe)?)\\s+(user|group|localgroup|accounts)\\b\" or // enumeration\n    ProcessCommandLine has_any (\"net view\", \"net share\") or // network recon\n    ProcessCommandLine has_any (\"administrator\", \"admin\", \"domain admin\") or // privilege reference\n    ProcessCommandLine contains \"\\\\\\\\\"  or // lateral movement indicator\n    ProcessCommandLine has \"/persistent:yes\"\n)\n| where not ( // exclusions\n    InitiatingProcessFileName in~ (\"mmc.exe\", \"compmgmt.msc\") or\n    (AccountName =~ \"system\" and InitiatingProcessFileName =~ \"svchost.exe\") or\n    ProcessCommandLine has_any (\"/?\", \"/help\") or \n    ProcessCommandLine contains \"Deploy\" or \n    DeviceName startswith \"ec2\" or // when temporary ec2 instances are launched, accounts are automatically provisioned via net.exe\n    AccountName == \"svctfsserviceprd\" or \n    DeviceName startswith \"sh50pw\" or\n    ProcessCommandLine contains \"IIS_IUSR\" or \n    ProcessCommandLine contains \".local /D /Y\" or // this is part of a cleanup script\n    AccountName == \"svccgopsprd\" or\n    (ProcessCommandLine has_any (\"/delete\") and not(ProcessCommandLine has_any (\"user\", \"group\"))) or\n    ProcessCommandLine contains \"start sense\" or // this is windows defender advanced threat protection being started (should be fine as long as not disabled) \n    (ProcessCommandLine contains \"sql\" and ProcessCommandLine contains \"svc\") or // sql service account script\n    ProcessCommandLine contains \"MultiFamilyRptsSales\" or // some monthly script for adding to this specific AD group\n    DeviceName startswith \"cg01jumpprd\" or // this server expected to do a lot of net.exe activity\n    (DeviceName contains \"etna\" and ProcessCommandLine contains \"Etna\") // expected\n)\n| extend RiskScore = // risk scoring\n    case(\n        ProcessCommandLine has_any (\"/add\", \"/delete\") and ProcessCommandLine has_any (\"user\", \"group\") and ProcessCommandLine !contains \"bmercedes\", 10,\n        ProcessCommandLine has_any (\"stop\", \"start\") and ProcessCommandLine has_any (\"Defender\", \"WinDefend\"), 9,\n        (ProcessCommandLine has_any (\"administrator\", \"admin\", \"domain admin\") and ProcessCommandLine !contains \"bmercedes\"), 8,\n        ProcessCommandLine contains \"\\\\\\\\\" and ProcessCommandLine !has \"/delete\", 7,\n        ProcessCommandLine matches regex @\"(?i)^.*net\\s+(user|group|localgroup)\\s*$\", 6,\n        ProcessCommandLine has_any (\"net view\", \"net share\"), 5,\n        ProcessCommandLine contains \"\\\\\\\\\", 4, \n        3\n    )\n| extend RiskScore = iff(ProcessCommandLine !contains \"/domain\", RiskScore - 2, RiskScore) // reduce risk score if modifying local machine rather than AD\n| summarize \n    EventCount = count(),\n    MaxRiskScore = max(RiskScore),\n    AvgRiskScore = avg(RiskScore),\n    UniqueCommands = dcount(ProcessCommandLine),\n    Commands = make_set(ProcessCommandLine, 10),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated)\n    by DeviceName, AccountName, bin(TimeGenerated, 2h)\n| where (\n    (EventCount >= 5  and UniqueCommands > 1 and MaxRiskScore > 1) or // volume threshold\n    (EventCount >= 9 and UniqueCommands == 1 and MaxRiskScore  > 1) or\n    MaxRiskScore >= 8 or // high-risk command\n    (UniqueCommands >= 3 and AvgRiskScore >= 6) // multiple suspicious commands\n)\n| extend AlertReason = case(\n    MaxRiskScore >= 9, strcat(\"Critical net.exe usage detected (Risk: \", MaxRiskScore, \")\"),\n    EventCount >= 10 and MaxRiskScore > 1, strcat(\"High volume net.exe usage (\", EventCount, \" events)\"),\n    UniqueCommands >= 4 and MaxRiskScore > 1, strcat(\"Multiple suspicious commands (\", UniqueCommands, \" unique)\"),\n    strcat(\"Suspicious net.exe activity (Risk: \", MaxRiskScore, \")\")\n)\n| project TimeGenerated, DeviceName, AccountName, EventCount, MaxRiskScore, \n          UniqueCommands, AlertReason, Commands, FirstSeen, LastSeen\n| order by MaxRiskScore desc, EventCount desc",
+        "queryFrequency": "PT4H",
+        "queryPeriod": "PT4H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "Discovery",
+          "Persistence",
+          "LateralMovement"
+        ],
+        "techniques": [
+          "T1087",
+          "T1135",
+          "T1018",
+          "T1136",
+          "T1098",
+          "T1021"
+        ],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {
+          "DeviceName": "DeviceName",
+          "MaxRiskScore": "MaxRiskScore",
+          "AlertReason": "AlertReason"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/221dcc77-f09e-4924-bda0-20ec2fba9def')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/221dcc77-f09e-4924-bda0-20ec2fba9def')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT5H",
+        "queryPeriod": "PT5H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserIdentityArn"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "TargetName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "displayName": "_DEV: STS AssumeRole Abuse",
+        "enabled": true,
+        "description": "Detects STS privilege escalation where a user uses an STS token to assume a role with attachuserpolicy/attachrolepolicy permissions and attaches a policy to themselves/their roles. This will alert on successes and failures. \n\nHandling Guidance:\n1. Verify intent and confirm if the action was approved or an operational task.\n2. Identify actor and review policy change. \n3. Revert if unauthorized and revoke the STS session. \n4. Report overly permissive roles to secops to see if they can be restricted.",
+        "alertRuleTemplateName": null,
+        "query": "// Contributor: Sky Tran\n// Reviewer: Dian Gavanarov\n//\n// Description: Detects STS privilege escalation where a user uses an STS token to assume a role with attachuserpolicy/attachrolepolicy permissions and attaches a policy to themselves/their roles.\n//\n// Change notes\n// ------------\n// 06/26/25 Sky Tran - initial query\n// 06/27/25 Sky Tran - fixed entity mapping and excluded secops\n// 07/08/25 Sky Tran - SageMaker exclusion\n// 07/15/25 Samuel Liu - Added requested projection of columns and added exclusions for all secops aws accounts \"aws_security_*_secops\"\n//\n// Handling Guidance:\n// 1. Verify intent and confirm if the action was approved or an operational task.\n// 2. Identify actor and review policy change. \n// 3. Revert if unauthorized and revoke the STS session. \n// 4. Report overly permissive roles to secops to see if they can be restricted.\n//\nAWSCloudTrail\n| where EventName in (\"AttachRolePolicy\", \"AttachUserPolicy\")\n| where UserAgent !contains \"terraform\" // terraform (iac) usage is audited and approved\n| where UserIdentityInvokedBy != \"cloudformation.amazonaws.com\" // cloudformation (iac) usage is audited and approved\n| where UserIdentityType == \"AssumedRole\"\n| where ipv4_is_private(SourceIpAddress) == false\n| extend \n    PolicyArn = tostring(parse_json(RequestParameters).policyArn),\n    RoleName = case(EventName == \"AttachRolePolicy\", tostring(parse_json(RequestParameters).roleName), \"\"),\n    UserName = case(EventName == \"AttachUserPolicy\", tostring(parse_json(RequestParameters).userName), \"\")\n| where PolicyArn !has \"policy/service-role/\" and RoleName !contains\"Execution\" // these are roles only AWS services should be using\n| where PolicyArn !contains \"SageMaker\"\n| where not(RoleName has \"StepFunctions\" and UserIdentityArn contains \"snagori@costar.com\") // why is this guy using sts tokens to give his step function permissions\n| where UserIdentityArn !has \"/CidExecRole/\" // this role is for cloud intelligence dashboards (quicksight)\n| extend TargetName = coalesce(RoleName, UserName)\n| extend aws_account = extract(@\"assumed-role/([^/]+)/\", 1, UserIdentityArn)\n| where not(aws_account matches regex \"^aws_security_.*_secops$\")\n| where not(TargetName == \"CidQuickSightDataSourceRole\" and UserIdentityArn has \"vault-approle-csgpbuildcostreportrole\")\n| where not(UserIdentityArn matches regex @\"aws_security_.*_secops\")\n// | where isempty(ErrorCode) == true // successful policy attachment\n| extend Result = case(\n    isempty(ErrorCode) == false, ErrorCode,\n    \"Success\"\n)\n| summarize count(), PolicyArns = make_set(PolicyArn) by bin(TimeGenerated, 2h), EventName, TargetName, Result, UserIdentityArn, SourceIpAddress, UserAgent, SessionIssuerArn, SessionIssuerAccountId\n| project TimeGenerated, PolicyArns, EventName, Result, TargetName, UserIdentityArn, SourceIpAddress, UserAgent, SessionIssuerAccountId, SessionIssuerArn"
+      }
+    }
+  ]
+}

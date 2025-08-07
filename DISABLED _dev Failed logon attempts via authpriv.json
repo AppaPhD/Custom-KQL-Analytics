@@ -1,0 +1,91 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1dda6ccf-f1d8-431a-af00-c982be9a40cc')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1dda6ccf-f1d8-431a-af00-c982be9a40cc')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "DISABLED _dev: Failed logon attempts via authpriv",
+                "description": "Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the account that tried to log in \nisn't provisioned on the machine. A few hits could indicate someone attempting to access a machine they aren't authorized to access. \nIf there are many of hits, especially from outside your network, it could indicate a brute force attack. \nDefault threshold for logon attempts is 6.",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "//Disabling this rule - the RemoteIP isn't being parsed perfectly, so false positives are thrown. \nlet exceptedSources_ = dynamic([\"cg01vscanprd002.us.costar.local\"]);\nlet exceptedIPs_  = dynamic([\"172.18.162.38\",\"172.16.255.33\"]);\nlet threshold = 15;\n  // Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.\n  // IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages\n  // are aggregated.\n  Syslog\n  | where Facility =~ \"authpriv\"\n  | where SyslogMessage has \"authentication failure\" and SyslogMessage has \" uid=0\"\n  | parse SyslogMessage with * \"rhost=\" RemoteIP\n  | project TimeGenerated, Computer, ProcessName, HostIP, RemoteIP, ProcessID\n  | join kind=innerunique (\n      // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. \n      Syslog \n      | where Facility =~ \"authpriv\"\n      | where SyslogMessage has \"user unknown\"\n      | project Computer, HostIP, ProcessID\n      ) on Computer, HostIP, ProcessID\n  // Count the number of failed logon attempts by External IP and internal machine\n  | summarize FirstLogonAttempt = min(TimeGenerated), LatestLogonAttempt = max(TimeGenerated), TotalLogonAttempts = count() by Computer, HostIP, RemoteIP\n  // Calculate the time between first and last logon attempt (AttemptPeriodLength)\n  | extend TimeBetweenLogonAttempts = LatestLogonAttempt - FirstLogonAttempt\n  | where TotalLogonAttempts >= threshold\n  | project FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts, TotalLogonAttempts, SourceAddress = RemoteIP, DestinationHost = Computer, DestinationAddress = HostIP\n  | sort by DestinationHost asc nulls last\n    //Exclusions\n| where not(SourceAddress has_any (exceptedIPs_))\n| where not(SourceAddress has_any (exceptedSources_))\n  | extend timestamp = FirstLogonAttempt, HostCustomEntity = DestinationHost, IPCustomEntity = DestinationAddress\n  | extend Title_ = strcat(\"Linux Endpoint: \", TotalLogonAttempts, \" logon attempts via authpriv from \", SourceAddress, \" for an unknown user.\")\n  | extend Description_ = strcat(\"The authpriv facility has logged \", TotalLogonAttempts, \" attempts to login where the result is 'user unknown.' This may be a sign of reconnaissance activity.\",\n\"\\n\",\"Destination: \",DestinationHost,\":\",DestinationAddress,\n\"\\n\",\"Source Address: \",SourceAddress\n)",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1110"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "e7ec9fa6-e7f7-41ed-a34b-b956837a3ee6",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{Title_}}",
+                    "alertDescriptionFormat": "Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the account that tried to log in isn't provisioned on the machine. A few hits could indicate someone attempting to access a machine they aren't authorized to access. \n\nIf there are many of hits, especially from outside our network, it could indicate a brute force attack or recon activity. \n\nHandling Guidance: Use the Investigation Insights workbooks to explore activity from the SourceAddress to identify if this is observed activity is part of a broader attack / brute force attempt. Look for succesfull authentications from that SourceAddress. \n"
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "DestinationHost"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "SourceAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

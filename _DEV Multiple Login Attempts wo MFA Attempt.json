@@ -1,0 +1,90 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7e034e93-d42d-449b-8fae-deae581f2334')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7e034e93-d42d-449b-8fae-deae581f2334')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_DEV: Multiple Login Attempts w/o MFA Attempt",
+        "description": "Reference: https://costar-group-prod-dev.atlassian.net/browse/SEC-14166\nRelevant Workbook(s): _CSGP: Investigate Suspected Compromised Account\n\nDescription: Detects multiple login types for which no MFA response is given - implying an MFA request was sent, but the attacker did not have means to supply an answer.\n\nHandling Guidance: \n1. Correlate and verify the activity using the suspected compromised account workbook (Sign-in logs and AAD Identity Protection)\n2. Escalate if the sign-in attempts are suspicious and not successfully blocked/denied. ",
+        "severity": "Informational",
+        "enabled": true,
+        "query": "// Contributor: Sky Tran\n// Reviewer: Samuel Liu\n//\n// Description: This will look for login attempts associated with anomalous MFA error codes. \n//\n// Handling Guidance:\n// 1. Correlate and verify the activity using the suspected compromised account workbook (Sign-in logs and AAD Identity Protection)\n// 2. Escalate if the sign-in attempts are suspicious and not successfully blocked/denied. \n//\n// Change notes\n// ------------\n// 7/14/2025 Sky Tran - initial query\n//\nlet Costar_Public_IPs = ( //Trust Costar IPs\n    _GetWatchlist('Costar_Public_IP_Ranges')\n    | project SearchKey\n    | summarize make_list(SearchKey)\n    );\nlet AWS_Public_IPs = ( //AWS trusted IPs\n    _GetWatchlist('Costar_AWS_NAT_Gateways')\n    | project SearchKey\n    | summarize make_list(SearchKey)\n    );\nlet ignore_codes = dynamic([\"50074\",\"50076\",\"50097\",\"50078\", \"500121\"]); //these codes are mainly for redirects, not really \"fails\" but asking for MFA again\nlet enrich = (\nSigninLogs\n| where TimeGenerated > ago(2d)\n| where AuthenticationRequirement == \"multiFactorAuthentication\" and ConditionalAccessStatus == \"failure\" and AppDisplayName != \"Zscaler ZPA\"\n| where not(ipv4_is_in_any_range(IPAddress, toscalar(Costar_Public_IPs)))\n| where not(ipv4_is_in_any_range(IPAddress, toscalar(AWS_Public_IPs))) \n| where ResultType !in (ignore_codes)\n| summarize FailedApps = make_set(AppDisplayName), FailedCodes = make_set(ResultType) by UserPrincipalName, IPAddress);\nSigninLogs\n| where TimeGenerated > ago(14d)\n| where AuthenticationRequirement == \"multiFactorAuthentication\" and ConditionalAccessStatus == \"failure\" and AppDisplayName != \"Zscaler ZPA\"\n| where not(ipv4_is_in_any_range(IPAddress, toscalar(Costar_Public_IPs)))\n| where not(ipv4_is_in_any_range(IPAddress, toscalar(AWS_Public_IPs))) \n| where ResultType !in (ignore_codes)\n| make-series Events=count(), default=0 on TimeGenerated in range(ago(14d), now(), 4h) by UserPrincipalName\n| summarize EventCount=make_list(Events, 1000), TimeGenerated=make_list(TimeGenerated, 1000) by UserPrincipalName\n| extend (outliers, score, baseline) = series_decompose_anomalies(EventCount, 4.5, -1, \"linefit\")\n| mv-expand TimeGenerated, EventCount to typeof(long), outliers, baseline to typeof(long), score to typeof(double)\n| where outliers > 0 and todatetime(TimeGenerated) > ago(5h)\n| where EventCount > 5 // low pass filter\n| order by EventCount desc\n| extend TimeGenerated = tostring(format_datetime(todatetime(TimeGenerated),\"M/d/yyyy, h:mm:ss:fff tt\"))\n| join kind=leftouter enrich on UserPrincipalName\n| project-away UserPrincipalName1\n| order by EventCount",
+        "queryFrequency": "PT5H",
+        "queryPeriod": "PT5H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": [
+          "T1078"
+        ],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserPrincipalName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPAddress"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "FailedApps"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

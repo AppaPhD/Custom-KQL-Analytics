@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/59bb67db-4bec-4b19-a811-382b53e62c34')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/59bb67db-4bec-4b19-a811-382b53e62c34')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_DEV: Anomalous vault user/role policy modification",
+        "description": "This will look through vault user or role policy modifications and look for anomalous patterns. \n\nHandling Guidance:\n// 1. Members of the devops team will usually directly modify policies via default administrator account, check the initiating\n// user's role and for jira tickets.\n// 2. If the user is in a technical role, contact the user to confirm business intentions.\n// 3. Any suspicious activity past this should be escalated to secops. ",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "// Contributor: Sky Tran\n// Reviewer: Grover Mewborn\n//\n// Description: This will look through vault user or role policy modifications and look for anomalous patterns. \n//\n// Handling Guidance:\n// 1. Members of the devops team will usually directly modify policies via default administrator account, check the initiating\n// user's role and for jira tickets.\n// 2. If the user is in a technical role, contact the user to confirm business intentions.\n// 3. Any suspicious activity past this should be escalated to secops. \n//\n// Change notes\n// ------------\n// 7/8/25 Sky Tran - initial query\n//\nlet vlt = (union\n(\n    VaultEntAuditLogs_dev_CL\n    | extend type = \"dev\"\n),\n(\n    VaultEntAuditLogs_prd_CL\n    | extend type = \"prd\"\n),\n(\n    VaultEntAuditLogs_tst_CL\n    | extend type = \"tst\"\n));\nlet auth = (\n    vlt\n    | where request_path_s startswith \"auth/oidc/oidc/callback\"\n    | where not(isempty(auth_entity_id_g) and isempty(response_auth_display_name_s))\n    | distinct auth_entity_id_g, response_auth_display_name_s\n);\nlet enrich = (\n    vlt\n    | where type_s == \"request\"\n    | where request_operation_s in (\"update\", \"create\", \"write\") // some sort of modification\n    | where request_path_s has_any(\n        \"identity/entity\", // entity policy modification https://developer.hashicorp.com/vault/api-docs/secret/identity/entity\n        \"sys/policy\", // ACL policy modification https://developer.hashicorp.com/vault/api-docs/system/policy\n        \"sys/policies\" // ACL, RGP, EGP policy modification https://developer.hashicorp.com/vault/api-docs/system/policies\n    )\n    | where request_path_s != \"sys/policies/acl/dr-secondary-promotion\" // excluding disaster recovery because of noise\n    //| where response_auth_display_name_s != '' and isnotempty(response_auth_display_name_s)\n    // | summarize arg_max(response_auth_display_name_s, *) by auth_entity_id_g\n    | project-away time_t, auth_metadata_service_account_uid_g, auth_token_issue_time_t, region_s, request_mount_running_version_s, request_mount_type_s, request_namespace_id_s, request_remote_port_d, type_s, Type\n    | where auth_policies_s != @'[\"build_agent\",\"default\"]' and auth_policies_s != @'[\"default\",\"executor\"]'\n    | join kind=leftouter auth on auth_entity_id_g \n    | project TimeGenerated, type, request_headers_user_agent_s, auth_entity_id_g, response_auth_display_name_s1, auth_policies_s, cluster_s, request_path_s, request_remote_address_s, request_request_uri_s, vault_s\n);\nenrich\n    | make-series Events=count(), default=0 on TimeGenerated in range(ago(14d), now(), 4h) by response_auth_display_name_s1\n    | summarize EventCount=make_list(Events, 1000), TimeGenerated=make_list(TimeGenerated, 1000) by response_auth_display_name_s1\n    | extend (outliers, score, baseline) = series_decompose_anomalies(EventCount, 3.5, -1, \"linefit\")\n    | mv-expand TimeGenerated, EventCount to typeof(long), outliers, baseline to typeof(long), score to typeof(double)\n    | where outliers > 0 and todatetime(TimeGenerated) > ago(5h)\n    | project response_auth_display_name_s1\n    | join kind=leftouter enrich on response_auth_display_name_s1 \n    | project-away response_auth_display_name_s1\n    | summarize \n        clusters = make_set(cluster_s), \n        request_paths = make_set(request_path_s),\n        request_uris = make_set(request_request_uri_s),\n        vaults = make_set(vault_s),\n        auth_entity_ids = make_set(auth_entity_id_g),\n        environments = make_set(type)\n        by bin(TimeGenerated, 1d), displayname = response_auth_display_name_s11",
+        "queryFrequency": "PT5H",
+        "queryPeriod": "PT5H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "techniques": [
+          "T1078"
+        ],
+        "subTechniques": [
+          "T1078.004"
+        ],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "{{displayname}} anomalously modified vault policy {{request_paths}}",
+          "alertDescriptionFormat": "Anomalous modification of vault policy {{request_paths}} in environment(s) {{environments}} in cluster(s) {{clusters}}",
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "displayname"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}
