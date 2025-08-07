@@ -1,0 +1,79 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/26a679da-7cef-4470-a6ab-6cba3c66b180')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/26a679da-7cef-4470-a6ab-6cba3c66b180')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Multiple Users Forwarded Email to the Same Destination",
+                "description": "",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: Henry Cox\r\n// Source:  NA\r\n// Reviewer:\r\n//\r\n// Description: Detect when multiple users are set to forward mail to the same recipient\r\n// Handling guidance: Notify Email team. Confirm that this is approved acitivty related to Time Off or employee departure.\r\n// Limitations: \r\n//\r\n// Query:\r\nOfficeActivity\r\n| where Operation =~ \"Set-Mailbox\"\r\n| where Parameters has \"ForwardingSmtpAddress\"\r\n| extend parsed = parse_json(Parameters)\r\n| mv-expand parsed\r\n| where parsed.Name == \"ForwardingSmtpAddress\"\r\n| extend\r\nparameterName = tostring(parsed.Name),\r\nfwdingDestination = tostring(parsed.Value)\r\n| where isnotempty(fwdingDestination)\r\n| extend ClientIPOnly = case(\r\nClientIP has \".\" and ClientIP has ':', tostring(split(ClientIP, \":\")[0]),\r\nClientIP has \".\" and ClientIP has '-', tostring(split(ClientIP, \"-\")[0]),\r\nClientIP has ']-', tostring(trim_start(@'[[]', tostring(split(ClientIP, \"]\")[0]))),\r\nClientIP has ']:', tostring(trim_start(@'[[]', tostring(split(ClientIP, \"]\")[0]))),\r\nisempty(ClientIP) and ClientIP_ has \".\" and ClientIP_ has ':', tostring(split(ClientIP_, \":\")[0]),\r\nisempty(ClientIP) and ClientIP_ has \".\" and ClientIP_ has '-', tostring(split(ClientIP_, \"-\")[0]),\r\nisempty(ClientIP) and ClientIP_ has ']-', tostring(trim_start(@'[[]', tostring(split(ClientIP_, \"]\")[0]))),\r\nisempty(ClientIP) and ClientIP_ has ']:', tostring(trim_start(@'[[]', tostring(split(ClientIP_, \"]\")[0]))),\r\nisnotempty(ClientIP), ClientIP,\r\nisnotempty(ClientIP_), ClientIP_,\r\n\"IP Not Available\"\r\n)\r\n| extend Port = case(\r\nClientIP has \".\" and ClientIP has ':', tostring(split(ClientIP, \":\")[1]),\r\nClientIP has \".\" and ClientIP has '-', tostring(split(ClientIP, \"-\")[1]),\r\nClientIP has ']-', tostring(split(ClientIP, \"]-\")[1]),\r\nClientIP has ']:', tostring(split(ClientIP, \"]:\")[1]),\r\nisempty(ClientIP) and ClientIP_ has \".\" and ClientIP_ has ':', tostring(split(ClientIP_, \":\")[1]),\r\nisempty(ClientIP) and ClientIP_ has \".\" and ClientIP_ has '-', tostring(split(ClientIP_, \"-\")[1]),\r\nisempty(ClientIP) and ClientIP_ has ']-', tostring(split(ClientIP_, \"]-\")[1]),\r\nisempty(ClientIP) and ClientIP_ has ']:', tostring(split(ClientIP_, \"]:\")[1]),\r\nisnotempty(ClientIP), ClientIP,\r\nisnotempty(ClientIP_), ClientIP_,\r\n\"IP Not Available\"\r\n)\r\n| extend UserId = iff(isempty(UserId), UserId_, UserId)\r\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId),\r\nPorts = make_set(Port), EventCount = count()\r\nby fwdingDestination, ClientIP = ClientIPOnly\r\n| where DistinctUserCount > 1\r\n| mv-expand UserId\r\n| extend UserId = tostring(UserId), Ports = tostring(Ports)\r\n| distinct\r\nStartTimeUtc,\r\nEndTimeUtc,\r\nUserId,\r\nDistinctUserCount,\r\nClientIP,\r\nPorts,\r\nfwdingDestination,\r\nEventCount\r\n| extend\r\ntimestamp = StartTimeUtc,\r\nAccountCustomEntity = UserId,\r\nIPCustomEntity = ClientIP",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Mailbox"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Mailbox",
+                        "fieldMappings": [
+                            {
+                                "identifier": "MailboxPrimaryAddress",
+                                "columnName": "fwdingDestination"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

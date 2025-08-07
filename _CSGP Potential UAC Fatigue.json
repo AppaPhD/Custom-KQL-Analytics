@@ -1,0 +1,96 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/61c82192-ff46-4601-94df-5dbb4bc9663d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/61c82192-ff46-4601-94df-5dbb4bc9663d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Potential UAC Fatigue",
+                "description": "This attack technique looks for arbitrary software that may be forcing users to execute commands with admin level privileges through UAC fatigue. The processes level of integrity goes from low to high.\n\nHandling Guidance:\nStep 1: Look for suspicious InitiatingProcessParentFileName, this may indicate an abnormal exectuable. If it is expected, add to the file_exclusions list.\nStep 2: Reach out to the user to ask if they intentionally ran any of the ProcessCommandLines or are familiar with the FileName and ParentFileNames. These may indicate the malicous payloads.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Analytic Rule Name: Potential UAC Fatigue\r\n//\r\n// Contributor: Dawinder Singh\r\n// Source: N/A\r\n// Reviewer: James Kim\r\n//\r\n// Description: This attack technique looks for arbitrary software that may be forcing users to execute commands with admin level privileges through UAC fatigue. The processes level of integrity goes from low to high.\r\n// Handling Guidance:\r\n// Step 1: Look for suspicious InitiatingProcessParentFileName, this may indicate an abnormal exectuable. If it is\r\n// expected, add to the file_exclusions list.\r\n// Step 2: Reach out to the user to ask if they intentinally ran any of the ProcessCommandLines or are familiar with the FileName and ParentFileNames. These may indicate the malicous payloads.\r\n//\r\n//UAC Github Reference: https://github.com/catzsec/ForceAdmin\r\n//\r\n//Note: The following Github Code was modified to evade defenders static detection of the tool.\r\n//\r\n// Change notes\r\n// ------------\r\n// 11/29/23 James Kim - Initial Version\r\n// 12/15/2023 Adrian Shina - added \"WindowsTerminal.exe\" to file_exclusions list\r\n//\r\n//Query:\r\nlet file_exclusions = dynamic([\"explorer.exe\", \"WindowsTerminal.exe\"]);\r\nDeviceProcessEvents\r\n| where FileName contains \"cmd.exe\" or FileName contains \"powershell.exe\"\r\n| where ProcessIntegrityLevel == \"High\"\r\n| where InitiatingProcessIntegrityLevel != \"High\"\r\n| where InitiatingProcessCommandLine contains \"powershell\" or InitiatingProcessCommandLine contains \"cmd.exe\"\r\n| where AccountName !contains \"administrator\"\r\n| where ProcessCommandLine !contains \"https://chocolatey.org/install.ps1\"\r\n| where (ProcessCommandLine !contains @\"AppData\\Local\\Temp\" and ProcessCommandLine !endswith \"execute.bat\")\r\n| where not(InitiatingProcessParentFileName has_any(file_exclusions))\r\n| sort by TimeGenerated desc\r\n| summarize count() by bin(TimeGenerated,1m), DeviceName, ProcessCommandLine, ProcessIntegrityLevel, InitiatingProcessFolderPath, InitiatingProcessCommandLine, InitiatingProcessParentFileName | where count_ >= 3",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1548"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Potential UAC Fatigue on {{DeviceName}} ",
+                    "alertDescriptionFormat": "This attack technique looks for arbitrary software that may be forcing users to execute commands with admin level privileges through UAC fatigue. The processes level of integrity goes from low to high.\n\nThe file {{InitiatingProcessParentFileName}} ran {{InitiatingProcessCommandLine}} which spawned an admin level process which ran the following command: {{ProcessCommandLine}} \n\nHandling Guidance:\nStep 1: Look for suspicious InitiatingProcessParentFileName, this may indicate an abnormal exectuable. If it is expected, add to the file_exclusions list.\nStep 2: Reach out to the user to ask if they intentinally ran any of the ProcessCommandLines or are familiar with the FileName and ParentFileNames. These may indicate the malicous payloads.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessParentFileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            },
+                            {
+                                "identifier": "ElevationToken",
+                                "columnName": "InitiatingProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

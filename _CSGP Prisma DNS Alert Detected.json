@@ -1,0 +1,72 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f569766b-c8da-4d4d-91ae-e3a5d3ae574a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f569766b-c8da-4d4d-91ae-e3a5d3ae574a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Prisma DNS Alert Detected",
+                "description": "Fires off playbook to search domain from prisma DNS alert in virustotal, and possibly alert SecOps.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "//Contributor: Jeremy Kesterson\r\n//Reference:  N/A\r\n//Reviewer: \r\n//Description: Identify DNS names that aren't in the container model and queried by containers. See events in the Prisma console for more details\r\nPrisma_CL\r\n| where type_s contains \"runtime\"\r\n| where TimeGenerated > ago(7d)\r\n| mv-expand split(aggregated_s, \"\\n\\n\")\r\n| parse kind=simple aggregated_s with \"Container runtime alert at \" timestamp \": Host - \" host \", FQDN - \" fqdn \", Container - \" container \", Image - \" image \", Rule - \" rule \", Message - \" message\r\n| where message startswith \"DNS resolution of suspicious name\"\r\n| extend dns1 = tostring(split(message, \"DNS resolution of suspicious name \")[1])\r\n| extend dns = tostring(split(dns1, \",\")[0])\r\n| distinct dns\r\n| project  dns",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CommandAndControl",
+                    "Exfiltration"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "DNS prisma alert to be enriched",
+                    "alertDescriptionFormat": "{{dns}}"
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "DNS",
+                        "fieldMappings": [
+                            {
+                                "identifier": "DomainName",
+                                "columnName": "dns"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,88 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/840cd858-b132-44e3-b469-f8b79064a31b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/840cd858-b132-44e3-b469-f8b79064a31b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: O365 - Suspicious Threat Protection Changes",
+                "description": "Adversaries may disable security solutions to avoid possible detection of their activities. Technique: T1078.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Obadiah \n// Source:  \n// Reviewer: \n//\n// Description: Adversaries may disable security solutions to avoid possible detection of their activities. Technique: T1078.\n// Handling Guidance: Contact the user to determine what if the activity was expected business activity or legitimate suspicious activity.\n//\n// Query: \nOfficeActivity\n| where (Operation == \"Disable-AntiPhishRule\" or Operation == \"Disable-SafeAttachmentRule\" or Operation == \"Disable-SafeLinksRule\" or Operation == \"Remove-AntiPhishPolicy\" or Operation == \"Remove-AntiPhishRule\" or Operation == \"Remove-SafeAttachmentPolicy\" or Operation == \"Remove-SafeAttachmentRule\" or Operation == \"Remove-SafeLinksPolicy\" or Operation == \"Remove-SafeLinksRule\")\n| extend URLCustomEntity = OfficeObjectId\n| extend IPCustomEntity = ClientIP\n| extend AccountCustomEntity = UserId",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1078"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "URLCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

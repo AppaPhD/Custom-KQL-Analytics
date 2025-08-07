@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/750fbfa3-72e9-44ab-87d2-436f84ca9913')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/750fbfa3-72e9-44ab-87d2-436f84ca9913')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "P1D",
+        "queryPeriod": "P1D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "TargetDevices"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "Reconnaissance"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "displayName": "_CSGP: RADIUS Misconfiguration - Exposed Device/Public IP attempting to authenticate",
+        "enabled": true,
+        "description": "This query looks for signs of misconfiguration - a public IP address performing radius authentication. If there are any hits for this, it means that a device has been inadvertently exposed directly to the internet. \n\nHandling Guidance: Alert the Network team that a device may be potentially exposed to the public internet. Create a NWSP ticket or notify a Network team member.",
+        "alertRuleTemplateName": null,
+        "query": "// Define the list of CoStar public IP ranges, excluding Akamai\nlet CoStar_Public_IPs = \n    _GetWatchlist('Costar_Public_IP_Ranges')\n    | where name != \"akamai\"\n    | project cidr\n    | summarize IPList = make_list(cidr);\n\n// Filter RADIUS logs for external IPs not in CoStar's public IPs\nRADIUS_Base\n| where not(ipv4_is_private(CallingStationID))\n    and not(ipv4_is_in_any_range(CallingStationID, toscalar(CoStar_Public_IPs)))\n| summarize \n    UserNameCount = dcount(TargetUsername),\n    TargetedUserNames = make_set(TargetUsername),\n    TargetDevices = make_set(ClientName),\n    AttackerIPs = make_set(CallingStationID)\n    by ClientIPAddress, Computer\n| order by UserNameCount desc"
+      }
+    }
+  ]
+}

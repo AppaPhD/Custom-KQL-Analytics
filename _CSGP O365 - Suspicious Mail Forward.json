@@ -1,0 +1,86 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/2adc0f03-3e78-497c-9f0b-1adce770c8b3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/2adc0f03-3e78-497c-9f0b-1adce770c8b3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: O365 - Suspicious Mail Forward",
+                "description": "Looks for suspicious mail forwarding to the RSS subscription inbox. The attacker can setup an Inbox Rule that moves some inbound mail to the RSS Feeds folder. The rule will mark the incoming message as Read and move it to that folder. Usually the rule will look for words specific to the types of shadow conversations they are carrying on alongside your user's conversations, so that it isn't just blanket moving all of the incoming email. It lets them sit in the inbox undetected for longer periods of time.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: Obadiah \r\n// Source:  \r\n// Reviewer: \r\n//\r\n// Description: Looks for suspicious mail forwarding to the RSS subscription inbox. The attacker can setup an Inbox Rule that moves some inbound mail to the RSS Feeds folder. The rule will mark the incoming message as Read and move it to that folder. Usually the rule will look for words specific to the types of shadow conversations they are carrying on alongside your user's conversations, so that it isn't just blanket moving all of the incoming email. It lets them sit in the inbox undetected for longer periods of time.\r\n// Handling Guidance: Send a teams message to the user to determine what experience they had and if the activity was expected or unexpected. If the activity seems suspicious, \r\n//\r\n// Change notes\r\n// ------------\r\n// 05/01/23 Obadiah Bridges - updated boilerplate, added handling guidance, moved to production. \r\n//\r\n// Query: \r\nOfficeActivity\r\n| where Operation =~ \"New-InboxRule\" or Operation =~ \"Set-InboxRule\"\r\n| extend parameterData = parse_json(Parameters)\r\n| mv-expand parameterData\r\n| extend Name_ = tostring(parameterData.Name)\r\n| extend Value_ = tostring(parameterData.Value)\r\n| where Name_ == \"MoveToFolder\" and Value_ has \"RSS Subscriptions\"\r\n| extend ClientIPAddress = case(ClientIP has \".\", tostring(split(ClientIP,\":\")[0]), ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))), ClientIP)\r\n| extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\\\')[-1]))\r\n| project-away Parameters, ClientIP_, UserId_\r\n| summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Name_, Value_, OriginatingServer, OfficeObjectId, RuleDetail\r\n| extend Timestamp = StartTimeUtc,  IPCustomEntity = ClientIPAddress, AccountCustomEntity = UserId , HostCustomEntity =  OriginatingServer\r\n| extend AccountName = trim_end(@\"\\@..+\",UserId)\r\n| extend DnsDomain = extract_all('@(.+)', AccountCustomEntity)\r\n| mv-expand DnsDomain\r\n| project-reorder Timestamp, StartTimeUtc, EndTimeUtc, Operation, UserId, ClientIPAddress, ResultStatus, Name_, Value_, OriginatingServer, OfficeObjectId, RuleDetail\r\n| sort by count_ desc ",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Collection"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "HostCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

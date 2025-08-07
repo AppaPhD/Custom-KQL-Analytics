@@ -1,0 +1,112 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4be143a5-4376-4b2b-8236-5c1d4b4f1358')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4be143a5-4376-4b2b-8236-5c1d4b4f1358')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Possible AD Enumeration via AD Explorer",
+                "description": "ADExplorer is an AD viewer and editor created by Microsoft. With AD Explorer, you can save snapshots of an AD database for offline viewing. This can be leveraged by a threat actor to gather sensitive information about an organization's structure, user accounts, and more.\n\nHandling Guidance:\n1. Check the login history of the user account and verify that there is no suspicious activity.\n2. If logins out of the ordinary may have occurred, escalate with the team to investigate further.\n3. If AD explorer is used mutiple times and proceeding activity on the device timeline looks to be indicative of enumeration or lateral movement, isolate the account/device.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributors: Kevin Cleavinger and Obadiah Bridges\r\n// Reviewers: Samuel Liu\r\n//\r\n// Description: This detection looks for users that we would not expect to use AD Explorer. This may be indicative of malicious enumeration of active directory resources with a compromised account.\r\n// Handling Guidance:\r\n//      1. Check the login history of the user account and verify that there is no suspicious activity.\r\n//      2. If logins out of the ordinary may have occurred, escalate with the team to investigate further.\r\n//      3. If AD explorer is used mutiple times and proceeding activity on the device timeline looks to be indicative of enumeration or lateral movement, isolate the account/device.\r\nlet exceptedDepartments_ = dynamic([\"Technology - CoStar Group\",\"IT\",\"Development\"]);\r\nlet exceptedTitles_ = dynamic([\"Engineer\", \"Developer\", \"Engineering\", \"Technical\", \"Data\"]);\r\nlet nonDevUsers = IdentityInfo\r\n| where TimeGenerated >= ago(7d)\r\n| where IsAccountEnabled == true\r\n| extend AccountName = tolower(AccountName)\r\n| distinct AccountName, Department, JobTitle, Manager\r\n| where isnotempty(Department);\r\nlet adProcesses = dynamic([\"ADExplorer.exe\", \"ADExplorer64.exe\"]);\r\nDeviceProcessEvents\r\n| where TimeGenerated >= ago(1h)\r\n| join kind=leftouter nonDevUsers on $left.InitiatingProcessAccountName == $right.AccountName\r\n| where FileName has_any(adProcesses)\r\n| where not (JobTitle has_any (exceptedTitles_))\r\n| where not (Department has_any (exceptedDepartments_))\r\n| where isnotempty(InitiatingProcessAccountName)\r\n| project TimeGenerated, AccountName, JobTitle, Department, ActionType, DeviceName, FileName, FolderPath, InitiatingProcessFolderPath, InitiatingProcessParentFileName",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P7D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1087"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "JobTitle"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ProcessId",
+                                "columnName": "InitiatingProcessParentFileName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

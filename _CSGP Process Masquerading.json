@@ -1,0 +1,90 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e093ccd3-f912-4a70-9ed9-3c7511e1f5ad')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e093ccd3-f912-4a70-9ed9-3c7511e1f5ad')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Process Masquerading",
+                "description": "This query will show you if these processes will be moved or changed from the system32: svchost.exe, explorer.exe, taskhost.exe, dllhost.exe, winlogon.exe, csrss.exe , lsass.exe, services.exe, spoolsv.exe, smss.exe, msiexec.exe , dwm.exe, conhost.exe, wuauclt.exe, regsvr32.exe, taskeng.exe\n\n\n\nThis can be where an attacker changes the name of a malicious process to Masquerade or pose to be one of those legitimate process in a folder path that deviates from the normal System 32 folder",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: kahmadjan\r\n// Reviewer: kahmadjan\r\n// Reference: \r\n//\r\n// Description: This query will show you if these processes will be moved or changed from the system32: svchost.exe, explorer.exe, taskhost.exe, dllhost.exe, winlogon.exe, csrss.exe , lsass.exe, services.exe, spoolsv.exe, smss.exe, msiexec.exe , dwm.exe, conhost.exe, wuauclt.exe, regsvr32.exe, taskeng.exe. This can be where an attacker changes the name of a malicious process to Masquerade or pose to be one of those legitimate process in a folder path that deviates from the normal System 32 folder\r\n// Handling Guidance: Reach out to the user who ran the process to confirm activity and check the DeviceFileEvents table to and reference the PreviousFileName column to see if this was malicious\r\n            \r\n// Query Modifications: \r\nlet suspiciousProcesses = dynamic([\"svchost.exe\", \"explorer.exe\", \"taskhost.exe\", \"dllhost.exe\", \"winlogon.exe\", \"csrss.exe\", \"lsass.exe\", \"services.exe\", \"spoolsv.exe\", \"smss.exe\", \"msiexec.exe\", \"dwm.exe\", \"conhost.exe\", \"wuauclt.exe\", \"regsvr32.exe\", \"taskeng.exe\"]);\r\nlet uncommonPaths = dynamic([\"C:\\\\Users\\\\\", \"C:\\\\ProgramData\\\\\", \"C:\\\\Temp\\\\\", \"C:\\\\Windows\\\\Temp\\\\\", \"C:\\\\Windows\\\\System32\\\\drivers\\\\etc\\\\\"]);\r\nDeviceProcessEvents\r\n| where FileName in (suspiciousProcesses) \r\n    and FolderPath has_any (uncommonPaths)\r\n    and InitiatingProcessFileName !in (suspiciousProcesses) \r\n| extend MasqueradingReason = case(\r\n                                  FileName == \"svchost.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"svchost.exe not in System32\",\r\n                                  FileName == \"explorer.exe\" and not(FolderPath startswith \"C:\\\\Windows\"),\r\n                                  \"explorer.exe not in Windows\",\r\n                                  FileName == \"taskhost.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"taskhost.exe not in System32\",\r\n                                  FileName == \"dllhost.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"dllhost.exe not in System32\",\r\n                                  FileName == \"winlogon.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"winlogon.exe not in System32\",\r\n                                  FileName == \"csrss.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"csrss.exe not in System32\",\r\n                                  FileName == \"lsass.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"lsass.exe not in System32\",\r\n                                  FileName == \"services.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"services.exe not in System32\",\r\n                                  FileName == \"smss.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"smss.exe not in System32\",\r\n                                  FileName == \"spoolsv.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"spoolsv.exe not in System32\",\r\n                                  FileName == \"conhost.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"conhost.exe not in System32\",\r\n                                  FileName == \"wuauclt.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"wuauclt.exe not in System32\",\r\n                                  FileName == \"dwm.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"dwm.exe not in System32\",\r\n                                  FileName == \"taskeng.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"taskeng.exe not in System32\",\r\n                                  FileName == \"regsvr32.exe\" and not(FolderPath startswith \"C:\\\\Windows\\\\System32\"),\r\n                                  \"regsvr32.exe not in System32\",\r\n                                  \"Unknown\"\r\n                              )\r\n| where InitiatingProcessFileName != \"tmdiag.exe\"\r\n| where InitiatingProcessFileName != \"svc.exe\"\r\n| project TimeGenerated, AccountName, DeviceName, MasqueradingReason, FileName, FolderPath, ProcessVersionInfoProductName, ProcessCommandLine\r\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Evasion",
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T0849",
+                    "T1036"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

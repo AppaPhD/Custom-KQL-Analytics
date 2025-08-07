@@ -1,0 +1,99 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a938004e-5de6-4686-9b96-ac3c9a74d0ea')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a938004e-5de6-4686-9b96-ac3c9a74d0ea')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: SCP Data Exfiltration",
+                "description": "Adversaries may utilize built in windows file copying tools such as scp, pscp and winscp to exfiltrate data outside of the network to a publicly hosted machine with port 22 open. SCP, is a file transfer network protocol used to move files onto servers.\n\nWhen investigating, Use Ip lookup tool to identify where the public IP is reaching out to. For on prem devices and AWS instances, use the watchlist (Costar_Public_IP_Ranges) and wiki page (Costar Public Networks & Akamai Site Shields) to identify whether the AWS instance belongs to CoStar despite being public. Note: This may require further investigation using other resources (Especially EC2 instances)\n\n1. Look at the ip address involved in the command and use ipsearch or other tools to identify if it is private or public, we do not care about private but are concerned with public ips.\n2. Look at what is being copied over. What directories are being accessed? One file may not be suspicious on its own, but entire directories or zipped files, may indicate large amounts of data.\n3. Look at how many times the command has been ran, is it abnormal for the user in question?\n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Dawinder Singh, James Kim\r\n// Reviewer: \r\n// Reference: MITRE 1048\r\n//\r\n// Description: Adversaries may utilize built in windows file copying tools such as scp, pscp and winscp to exfiltrate data outside of the network to a publicly hosted machine with port 22 open.\r\n// Handling Guidance: \r\n// 1. Look at the ip address involved in the command and use ipsearch or other tools to identify if it is private or public, we do not care about private but are concerned with public ips.\r\n// 2. Look at what is being copied over. What directories are being accessed? One file may not be suspicious on its own, but entire directories or zipped files, may indicate large amounts of data.\r\n// 3. Look at how many times the command has been ran, is it abnormal for the user in question?\r\n//Changes:\r\n// Add exclusions if need be for example this query has an exclusion of 9.1.0.551 because it is not an ip address, or add users if they seem to be triggered the alert at high frequencies.\r\n// Added -r flag for recursive mode (indicates a large amount of data being copied)\r\n// 11/22/2023 - Gen - Added URL Decoding to ProcessCommandLine to avoid false IPs. Added a more reliable private/public IP check.\r\nDeviceProcessEvents\r\n| where FileName contains \"scp.exe\" or FileName contains \"pscp.exe\"\r\n| where InitiatingProcessAccountName !contains \"system\"\r\n| where InitiatingProcessAccountName !contains \"svc\"\r\n| where ProcessCommandLine !contains \"9.1.0.551\"\r\n| extend IP = extract(@\"(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})\", 1, url_decode(ProcessCommandLine))\r\n| where not(ipv4_is_private(IP))\r\n| project\r\n    TimeGenerated,\r\n    DeviceName,\r\n    InitiatingProcessAccountName,\r\n    ProcessCommandLine,\r\n    InitiatingProcessCommandLine,\r\n    IP\r\n| sort by TimeGenerated desc",
+                "queryFrequency": "PT12H",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1048"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

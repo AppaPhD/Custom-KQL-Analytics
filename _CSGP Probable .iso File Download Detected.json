@@ -1,0 +1,111 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/10011bfe-8496-4226-ae92-a9b0b667ae1e')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/10011bfe-8496-4226-ae92-a9b0b667ae1e')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "File"
+            ],
+            "groupByAlertDetails": [
+              "DisplayName"
+            ],
+            "groupByCustomDetails": []
+          }
+        },
+        "entityMappings": [
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "URLDomain_"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "DeviceName"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "FileName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingProcessAccountUpn"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "FileOriginUrl"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Suspicious ISO Download: {{FileName}}",
+          "alertDescriptionFormat": "A potential suspicious ISO download has been observed: <br>\n{{Description_}} \n\nLooks for file events invloving iso files in a download directory. Downloading a file will be FileModified/FileRenamed events, rather than a FileCreated event. This could be legitimate activity, such as downloading a disk image for a virtual machine, but iso files can be used to hide malicious executables. It is uncommon for non-technical users to download and mount .iso files. \n\nHandling Guidance: Investigate file name and if it fits what the user is likely to be doing. \nPay close attention to the Domain that the ISO was downloaded from - look for domains that may spoofing costar infrastructure or are not likely to be providers of safe and authentic software.",
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "tactics": [
+          "InitialAccess",
+          "CommandAndControl"
+        ],
+        "techniques": [
+          "T1105"
+        ],
+        "subTechniques": [],
+        "displayName": "_CSGP: Probable .iso File Download Detected",
+        "enabled": false,
+        "description": "Looks for file events invloving iso files in a download directory. Downloading a file will be FileModified/FileRenamed events, rather than a FileCreated event. This could be legitimate activity, such as downloading a disk image for a virtual machine, but iso files can be used to hide malicious executables.",
+        "alertRuleTemplateName": null,
+        "query": "// Contributor: Brendan Burke\n// Source:  NA\n// Reviewer: Lucas Trainer\n//\n// Description: \n// Handling Guidance: Investigate file name and if it fits what the user is likely to be doing. \n// Pay close attention to the Domain that the ISO was downloaded from - look for domains that may spoofing costar infrastructure or are not likely to be providers of safe and authentic software.\n// ISO and IMG files may be used to evade malware detection. \n//\n// Change notes\n// xx/xx/xx Brendan Burke - Initial version\n// 05/16/23 Gunther Abbot - Exclude us.costar.local\n// 7/17/25 sliu - exclude rocky linux download domain\n//\n// Query: \nlet excludedDomains_ = dynamic([\n    \"myvs.download.prss.microsoft.com\",\n    \"download-ssc.cisco.com\",\n    \"download.my.visualstudio.com\",\n    \"download.microsoft.com\",\n    \"myvs.download.prss.microsoft.com\",\n    \"download2.vmware.com\",\n    \"software.download.prss.microsoft.com\",\n    \"download.prss.microsoft.com\",\n    \"costarsoftwaredeu-my.sharepoint.com\",\n    \".checkpoint.com\",\n    \"officecdn.microsoft.com\",\n    \"mirror.cs.jmu.edu\", //linux image host\n    \"h30279.www3.hpe.com\",\n    \"downloads.hpe.com\",\n    \"costarsoftware.sharepoint.com\",\n    \"downloads.citrix.com\",\n    \"broadcom.com\",\n    \"download.rockylinux.org\"\n    ]);\nDeviceFileEvents\n| where FileName endswith \".iso\"\n    or FileName endswith \".img\"\n    or FileName endswith \"vhd\"\n    or FileName endswith \"vhdx\"\n| where FolderPath contains \"download\"\n| where isnotempty(FileOriginUrl)\n//Add Exclusions\n| where InitiatingProcessAccountUpn !in (\"jbartola@costar.com\", \"cshepard@costar.com\")\n| where not(FolderPath startswith \"C:\\\\Windows\\\\SoftwareDistribution\\\\Download\\\\\") //Exclude device setup files\n| where InitiatingProcessFolderPath <> \"c:\\\\$windows.~bt\\\\sources\\\\setuphost.exe\" //Exclude windows setup host\n| where not(FileName startswith \"ubuntu-\") //Exclude likely FP\n| extend URLDomain_ = tostring(parse_url(FileOriginUrl).Host)\n| where not(URLDomain_ has_any (excludedDomains_))\n| where URLDomain_ !endswith \"us.costar.local\"\n//Write description details for alert\n| extend Description_ = strcat(\n                            \"User: \",\n                            InitiatingProcessAccountUpn,\n                            \"\\n\",\n                            \"ISO File: \",\n                            FileName,\n                            \"\\n\",\n                            \"Folder Path: \",\n                            FolderPath,\n                            \"\\n\",\n                            \"File Origin: \",\n                            iff(isnotempty(FileOriginUrl), FileOriginUrl, \"No data\"),\n                            \"\\n\",\n                            \"Initiating Process: \",\n                            InitiatingProcessFolderPath\n                        )\n| summarize\n    by\n    DeviceName,\n    InitiatingProcessAccountUpn,\n    ActionType,\n    FileName,\n    FolderPath,\n    InitiatingProcessFileName,\n    InitiatingProcessFolderPath,\n    FileOriginUrl,\n    Description_,\n    URLDomain_,\n    bin(TimeGenerated, 5m)"
+      }
+    }
+  ]
+}

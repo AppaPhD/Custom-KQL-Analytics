@@ -1,0 +1,70 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/71f3a4b3-0fd6-43ba-9ee2-61dd3fb0bdf4')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/71f3a4b3-0fd6-43ba-9ee2-61dd3fb0bdf4')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Sentinel Health - Webhook Calls Approaching Limit",
+                "description": "Logic apps have a webhook limit of 1500 . In order to detect if we are close to hitting that limit, this query detects when logic app trigger \"send data\" exceeds more than 1000 operations per second.\n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: Lucas Trainer & Innocent Wafula\r\n// Reviewer: James Kim\r\n// Reference: https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits & https://docs.microsoft.com/en-us/azure/logic-apps/logic-apps-limits-and-config?tabs=azure-portal\r\n//\r\n// Description: Logic apps have a webhook limit of 1500 . In order to detect if we are close to hitting that limit, this query detects when logic app trigger \"send data\" exceeds more than 1000 operations per second.\r\n// Handling Guidance: Evaluate sources sending data via webhooks to identify the top talker: change the bin operator below to | summarize WebhookCalls=count() by bin(TimeGenerated, 60s), LogicAppName\r\n//\r\n// Change notes\r\n// ------------\r\n// 05/15/23 James Kim - Promoted to CSGP and expanded results\r\n//\r\nlet ingestion_delay = 1min;\r\nlet rule_look_back = 10min;\r\nAzureDiagnostics\r\n| where TimeGenerated >= ago(ingestion_delay + rule_look_back)\r\n| where ingestion_time() > ago(rule_look_back)\r\n| where Category == \"WorkflowRuntime\"\r\n| extend TriggerName=Resource\r\n| extend LogicAppName=resource_workflowName_s\r\n| where TriggerName == \"SEND_DATA\"\r\n| summarize TriggerActions=count() by bin(TimeGenerated, 60s), LogicAppName, TriggerName\r\n| where TriggerActions >= 1000",
+                "queryFrequency": "PT10M",
+                "queryPeriod": "PT10M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1499"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "P1D",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "AzureResource",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ResourceId",
+                                "columnName": "LogicAppName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

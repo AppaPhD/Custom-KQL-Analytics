@@ -1,0 +1,61 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b459da18-2ac9-4df4-b1d4-b3567efd8047')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b459da18-2ac9-4df4-b1d4-b3567efd8047')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Recon Commands Used",
+                "description": "This will be created to add into other incidents \n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "let ReconCommands = dynamic([\r\n    \"ifconfig\", \"whoami\", \"uname\", \"ps\", \"netstat\", \"ping\", \"traceroute\", \"nmap\",\r\n    \"ipconfig\", \"arp\", \"route\", \"nslookup\", \"dig\", \"hostname\", \"curl\", \"wget\",\r\n    \"lsof\", \"ss\", \"tcpdump\", \"nc\", \"netcat\", \"find\", \"dir\", \"ls\", \"pwd\", \r\n    \"echo\", \"env\", \"systeminfo\", \"tasklist\", \"getmac\", \"dsquery\", \"sc\", \r\n    \"wmic\", \"powershell\", \"arp\", \"certutil\", \"at\", \"schtasks\", \"net\", \r\n    \"nbtstat\", \"vssadmin\", \"quser\", \"query\", \"gpresult\", \"powershell -command\", \r\n    \"powershell -encodedcommand\"]);\r\nDeviceProcessEvents\r\n| where ProcessCommandLine has_any (ReconCommands)\r\n| extend ReconCommand = extract(\"(?i)(ifconfig|whoami|uname|ps|netstat|ping|traceroute|nmap)\", 1, \r\n                                coalesce(ProcessCommandLine, InitiatingProcessCommandLine)) \r\n| summarize \r\n    CommandCount = count(),\r\n    ReconCommandsExecuted = make_set(ReconCommand)     \r\n    by AccountUpn, TimeGenerated, DeviceName, MachineGroup\r\n    | where CommandCount > 2\r\n| project TimeGenerated, AccountUpn, CommandCount, ReconCommandsExecuted, DeviceName, MachineGroup",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1016",
+                    "T1082"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

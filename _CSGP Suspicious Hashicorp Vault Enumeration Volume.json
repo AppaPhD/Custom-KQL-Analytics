@@ -1,0 +1,85 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5455c869-7240-4403-9cfa-81951fe3f87b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5455c869-7240-4403-9cfa-81951fe3f87b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Suspicious Hashicorp Vault Enumeration Volume",
+                "description": "This analytic is a simple detection that looks for high volume of secret access requests within a short time frame.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "VaultEntAuditLogs_prd_CL\r\n| where TimeGenerated > ago(1d)\r\n| where request_request_uri_s contains \"v1/auth/\" // and request_request_uri_s !contains \"token\"\r\n| where type_s has \"request\" //look for requests to the vault\r\n| summarize UniqueRequests = count_distinct(request_request_uri_s), URIs = make_set(request_request_uri_s) by request_remote_address_s\r\n| where UniqueRequests >= 300 //the max i saw in the last 7 days was 150, so 3x would be 450",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery",
+                    "Reconnaissance",
+                    "LateralMovement",
+                    "PrivilegeEscalation",
+                    "CredentialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Possible Hashicorp Enumeration from {{request_remote_address_s}} {{UniqueRequests}} Times",
+                    "alertDescriptionFormat": "A user from location: {{request_remote_address_s}}  requested unique secret access {{UniqueRequests}}  times. ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "request_remote_address_s"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "URIs"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

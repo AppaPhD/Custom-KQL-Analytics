@@ -1,0 +1,90 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d60224fd-0fb8-4fc7-b30a-53a7d4749934')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d60224fd-0fb8-4fc7-b30a-53a7d4749934')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Network - Unusual Port Scanning (10m time period)",
+                "description": "An attacker may use tools like nmap to conduct port scans to discover hosts and services on a network, identifying open ports and the software and versions running on those ports. This type of scan is often used in the reconnaissance phase of an attack to gather detailed about the network's structure and potential vulnerabilities. \n\nThis detection is set to look for instances of a single device communicating with 15+ other devices over the specific ports 22, 445, and 3389 within a 10m time period to indicate a potential port scan.\n\nHandling Guidance:\nAn attacker may use tools like nmap to conduct port scans to discover hosts and services on a network, identifying open ports and the software and versions running on those ports. This type of scan is often used in the reconnaissance phase of an attack to gather detailed about the network's structure and potential vulnerabilities. \n1. If the source IP (LocalIP) is public, take the source IP and enter it in the search bar on MDTI: https://ti.defender.microsoft.com/ to gather any available information about the attacker. \n2. If the source IP (LocalIP) is private use Nslookup or Axonius to find info about the source host. Additionally, if the IP address is determined to be from a legitimate attacker add it to the list of IPs in M365 IOC to block the IP.\n3. Investigate any login attempts on Target IP. If scan originates from an internal IP determine who the user was and reach out to them to ask why they were conducting a port scan.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Obadiah Bridges, Kamran Ahmadjan, Dawinder Singh, Ted Sheehy, Anthony Edelstein, Kevin Cleavinger\r\n// Reviewer: \r\n// Reference: 2024 Purple Team Engagement #1: https://wiki.costargroup.com/pages/viewpage.action?pageId=934952405#:~:text=9-,Network%20Enumeration,-TA0007%3A%20Discovery\r\n//\r\n// Description: Port scanning detection that is set to look for instances of a single device communicating with 15+ other devices over the specific ports 22, 445, and 3389 within a 10m time period to indicate a potential port scan. \r\n// Handling Guidance: \r\n// An attacker may use tools like nmap to conduct port scans to discover hosts and services on a network, identifying open ports and the software and versions running on those ports. This type of scan is often used in the reconnaissance phase of an attack to gather detailed about the network's structure and potential vulnerabilities. \r\n// If the source IP (LocalIP) is public, take the source IP and enter it in the search bar on MDTI: https://ti.defender.microsoft.com/ to gather any available information about the attacker. \r\n// If the source IP (LocalIP) is private use Nslookup or Axonius to find info about the source host. \r\n//Additionally, if the IP address is determined to be from a legitimate attacker add it to the list of IPs in M365 IOC to block the IP.\r\n//Investigate any login attempts on Target IP. If scan originates from an internal IP determine who the user was and reach out to them to ask why they were conducting a port scan.\r\n// Change notes\r\n// ------------\r\n// 03/13/24 - Initial version completed in team effort. \r\n//\r\nlet remoteports = dynamic([\"22\", \"445\", \"3389\"]);\r\nlet falsepositives = dynamic([\"cg01vscanprd002.us.costar.local\", \"cg02vscanprd001.us.costar.local\", \"cg04vscanprd001.us.costar.local\", \"cg03vscanprd001.us.costar.local\"]); // known scanners\r\nDeviceNetworkEvents\r\n| where LocalIP !in (\"172.16.235.200\", \"172.17.132.202\", \"172.16.255.200\", \"172.17.132.200\") //excluded domain controllers\r\n| where DeviceName !in (falsepositives)\r\n| where RemotePort in (remoteports)\r\n| summarize PortsScanned = make_set(RemotePort) by RemoteIP, LocalIP, InitiatingProcessAccountUpn, DeviceName, bin(TimeGenerated, 10m)\r\n| extend PortCount = array_length(PortsScanned)\r\n| where PortCount >= 3\r\n| summarize DevicesScannedCount = dcount(RemoteIP), DevicesAndPorts = make_list(pack('DeviceScannedIP', RemoteIP, 'PortsScanned', PortsScanned)) by LocalIP, InitiatingProcessAccountUpn, DeviceName, bin(TimeGenerated, 10m) \r\n| where DevicesScannedCount >= 15",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1423",
+                    "T1040",
+                    "T1007"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountUpn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "LocalIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "LocalIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,81 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/cf3e647b-fce5-4bd6-95d9-5d042f8d88af')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/cf3e647b-fce5-4bd6-95d9-5d042f8d88af')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: SVC Account Activated PIM Role",
+                "description": "This query will detect PIM role activiations from a service account. Service accounts never be eligible for a PIM role and should have its roles permanently assigned.\nHandling Guidance: Look up sign in activity for the service account for any signs of local/interactive sign ins to try to find a user logging in manually. Determine the role that was activated and justify the use case for a service account having that role. Look up who the owner is and the purpose of the service account and determine the impact if the account is marked as high risk. If there are evident signs of compromise, mark the service account as high risk, revoke sessions, and notify the owners immediately.sign ins to try to find a user logging in manually. Determine the role that was activated and justify the use case for a service account having that role. If evident signs of compromise, mark the service account as compromised and revoke sessions.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: jkim2\r\n// Reviewer: \r\n// Reference: https://servicedesk.costargroup.com/browse/OPCN-39818\r\n//\r\n// Description: This query will detect PIM role activiations from a service account. Service accounts never be eligible for a PIM role and should have its roles permanently assigned.\r\n// Handling Guidance: Look up sign in activity for the service account for any signs of local/interactive sign ins to try to find a user logging in manually. Determine the role that was activated and justify the use case for a service account having that role. Look up who the owner is and the purpose of the service account and determine the impact if the account is marked as high risk. If there are evident signs of compromise, mark the service account as high risk, revoke sessions, and notify the owners immediately.\r\n// Query Modifications: \r\n//\r\nunion isfuzzy=true \r\n(AuditLogs\r\n| where Identity startswith \"svc\"\r\n| where Category == \"RoleManagement\"\r\n| where OperationName in(\"Add member to role requested (PIM activation)\", \"Add member to role completed (PIM activation)\")\r\n| where TargetResources contains \"59f78d96-94d7-4487-8979-6fe2ed1951d4\" or TargetResources contains \"2a81f9b4-8950-4bf6-b3e8-5c444fe82782\" or TargetResources contains \"65e39f69-aed6-4608-a526-8af37096f107\" or TargetResources contains \"672ea56e-23a0-4b30-9d02-ef0c8961be7f\" or TargetResources contains \"ac4f91ad-b749-4a74-a275-4f8e19d6a4d1\" or TargetResources contains \"ec5ce676-4ea3-4c3c-b1c5-146966acfb28\" or TargetResources contains \"0e803f7d-bd73-403d-b604-7a8005cbb96b\" or TargetResources contains \"1198d80e-6a59-4cd7-93a2-ed72d3fef4d2\" or TargetResources contains \"8f563140-c952-4bb4-9bb9-6eaec4e9afa4\" or TargetResources contains \"ff57335c-4ca3-4b18-a44d-86dce2629c8a\" or TargetResources contains \"831af02d-5d20-49d0-ab9a-f803f448bede\" or TargetResources contains \"129776cd-ba97-4d96-8b43-06f1935218df\"\r\n| extend TargetUser = tostring(TargetResources[0].userPrincipalName)\r\n| extend InitiatedUser = tostring(InitiatedBy.user.userPrincipalName)\r\n| extend RoleName = tostring(parse_json(tostring(parse_json(TargetResources)[0].modifiedProperties))[1].newValue)\r\n| extend RoleName=replace_string(RoleName,'\"AAD Application Admin Role - Systems - Eligible Assignment\"',\" Application Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD Security Admin Role - Active Assignment\"',\" Security Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD Security Admin Role - Eligibile Assignment\"',\" Security Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD Teams Admin Role - Eligible Assignment\"',\" Microsoft Teams Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD Privileged Role Admin - Eligible Assignment\"',\" Privileged Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD Global Admin Role - Eligible Assignment\"',\" Global Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD SharePoint Admin Role - Eligible Assignment\"',\" SharePoint Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD Privileged Authentication Admin Role - Eligible Assignment\"',\" Privileged Authentication Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD Teams Admin Role - Service Desk - Eligible Assignment\"',\" Microsoft Teams Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD Exchange Admin - Systems - Eligible Assignment\"',\" Exchange Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD Exchange Admin - Service Desk - Eligible Assignment\"',\" Exchange Administrator\")\r\n| extend RoleName=replace_string(RoleName,'\"AAD SharePoint\u00a0Admin Role - Service Desk - Eligible Assignment\"','Sharepoint Administrator')\r\n| extend Assignment_Type = tostring(TargetResources[1].type)\r\n| project TimeGenerated, TargetUser, InitiatedUser, Assignment_Type, RoleName\r\n),\r\n(AuditLogs\r\n| where Identity startswith \"svc\"\r\n| where Category == \"RoleManagement\"\r\n| where OperationName in(\"Add member to role requested (PIM activation)\", \"Add member to role completed (PIM activation)\")\r\n| extend TargetUser = tostring(TargetResources[2].userPrincipalName)\r\n| extend InitiatedUser = tostring(InitiatedBy.user.userPrincipalName)\r\n| extend RoleName = tostring(parse_json(TargetResources)[0].displayName)\r\n| extend Assignment_Type = tostring(TargetResources[2].type)\r\n| where Assignment_Type !contains \"Group\"\r\n| project TimeGenerated, TargetUser, InitiatedUser, Assignment_Type, RoleName, OperationName, Reason = ResultDescription, Result, AdditionalDetails)\r\n| sort by TimeGenerated desc\r\n| summarize arg_max(TimeGenerated, *) by RoleName",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1098"
+                ],
+                "subTechniques": [
+                    "T1098.003"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "TargetUser"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "SecurityGroup",
+                        "fieldMappings": [
+                            {
+                                "identifier": "DistinguishedName",
+                                "columnName": "RoleName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

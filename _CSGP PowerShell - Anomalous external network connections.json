@@ -1,0 +1,128 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1a9e502-fbe5-4f3e-91c3-616a9da919a2')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1a9e502-fbe5-4f3e-91c3-616a9da919a2')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: PowerShell - Anomalous external network connections",
+        "description": "This detection identifies unusual outbound network connections initiated by PowerShell processes (powershell.exe or pwsh.exe) to public IP addresses. It excludes connections to trusted services such as Microsoft, GitHub, and AWS. The focus is on potentially malicious PowerShell commands -such as Invoke-WebRequest, DownloadString, Net.Sockets.TCPClient, and Invoke-Expression - which are frequently used in malware delivery, command-and-control (C2) activity, and data exfiltration.\n\nHandling guide:\n\nIdentify the user and host involved.\nDetermine the execution context (e.g., scheduled task, user-initiated, script).\nCheck for parent processes (e.g., Office macros, scripts, or installers).\nAnalyze the PowerShell Script\n\nDecode any obfuscated or base64-encoded content.\nLook for signs of: Downloading payloads, Executing remote code, Establishing reverse shells\nCheck Network Traffic\n\nReview logs for DNS queries and HTTP/S requests, \nUse threat intelligence to assess the reputation of the DST IP.\nReview User Activity\n\nWas the user active during the time of the alert?\nAny signs of phishing or social engineering?\n\nIf any malicious activity is detected, isolate the system where the request originated from.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "// Contributor: kahmadjan\n// Reviewer: jkim2, Lucas Trainer\n// Description: \n// Detects anomalous external network connections initiated by PowerShell (powershell.exe, pwsh.exe) \n// to public IPs, excluding known legitimate services. Focuses on suspicious commands commonly used \n// in malware delivery, C2 communications, and data exfiltration.\n//\n// Handling Guidance: \n// Investigate the initiating process and user activity. Analyze the destination IP and URL. \n// If malicious IOCs are found, isolate the machine and/or add IOCs to the block list. \n// Reach out to the user to confirm business justification.\n//\n// Reference: [Add reference if available]\n\nlet monitoredProcesses = dynamic([\"powershell.exe\", \"pwsh.exe\"]);\nlet knownLegitDomains = dynamic([\n    \"microsoft.com\", \"github.com\", \"aws.amazon.com\", \"update.microsoft.com\",\n    \"avatars.githubusercontent.com\", \"chocolatey.org\", \"ocsp.digicert.com\",\n    \"s3.amazonaws.com\", \"Microsoft.Management.Services.IntuneWindowsAgent.exe\",\n    \"objects.githubusercontent.com\", \"slackb.com\", \"aka.ms\", \"dl-cli.pstmn.io\"\n]);\nlet suspiciousCommands = dynamic([\n    \"-EncodedCommand\", \"Invoke-WebRequest\", \"DownloadString\", \"Net.WebClient\",\n    \"Net.Sockets.TCPClient\", \"Invoke-Expression\", \"iex(\", \"Bypass\", \"Unrestricted\",\n    \"CertUtil -urlcache -f\", \"bitsadmin /transfer\", \"Invoke-RestMethod\",\n    \"New-Object System.Net.Sockets.TCPClient\", \"Invoke-Command\", \"Invoke-Item\"\n]);\n\nDeviceNetworkEvents\n| where InitiatingProcessFileName has_any (monitoredProcesses)\n| where RemoteIPType == \"Public\"\n| where not(RemoteUrl has_any (knownLegitDomains))\n| extend RemoteDomain = tostring(parse_url(RemoteUrl).Host)\n| extend ExecutedCommand = tostring(InitiatingProcessCommandLine)\n| where ExecutedCommand has_any (suspiciousCommands)\n| join kind=inner (\n    IdentityInfo\n    | project AccountName, AccountDisplayName, JobTitle\n) on $left.InitiatingProcessAccountName == $right.AccountName\n| where InitiatingProcessParentFileName has_any (monitoredProcesses)\n    and not(InitiatingProcessCommandLine contains \"SysprepInstance.ps1\")\n    and not(InitiatingProcessCommandLine contains \"aka.ms\")\n    and not(RemoteUrl contains \"Microsoft\")\n| summarize arg_max(TimeGenerated, *) by \n    TimeGenerated, DeviceName, InitiatingProcessAccountUpn, \n    AccountDisplayName, JobTitle, InitiatingProcessCommandLine, \n    InitiatingProcessParentFileName, RemoteUrl, RemoteIP, LocalPort, LocalIP",
+        "queryFrequency": "PT15M",
+        "queryPeriod": "PT15M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "Execution",
+          "CommandAndControl",
+          "Exfiltration"
+        ],
+        "techniques": [
+          "T1059",
+          "T1204",
+          "T1105",
+          "T1568"
+        ],
+        "subTechniques": [
+          "T1059.001"
+        ],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingProcessAccountUpn"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountDisplayName"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "InitiatingProcessCommandLine"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingProcessParentFileName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "RemoteIP"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "LocalIP"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": [
+          {
+            "columnName": "JobTitle"
+          }
+        ],
+        "templateVersion": null
+      }
+    }
+  ]
+}

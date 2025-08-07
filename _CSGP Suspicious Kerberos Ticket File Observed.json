@@ -1,0 +1,86 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/43192abd-695a-4099-86d7-458bde5416d1')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/43192abd-695a-4099-86d7-458bde5416d1')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Suspicious Kerberos Ticket File Observed",
+                "description": "Kerberos ticket files (.kirbi) are of interest to adversaries as they can contain sensitive data such as NTLM hashes that can be cracked offline. \n\nTo perform these attacks, a unique file extension variable is defined within Mimikatz that designates the default extension as .kirbi.\n\nModification of files with this extension can be a telltale sign that an adversary is in the midst of performing an attack such as \"Kerberoasting\"",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Author: Mohamed Elgendy\r\n// Source: https://redcanary.com/threat-detection-report/threats/mimikatz/\r\n// Reviewer: Lucas Trainer\r\n//\r\n// Description: Kerberos ticket files (.kirbi) are of interest to adversaries as they can contain sensitive data such as NTLM hashes that can be cracked offline. \r\n// To perform these attacks, a unique file extension variable is defined within Mimikatz that designates the default extension as .kirbi.\r\n// Modification of files with this extension may be a sign of credential theft. \r\n//\r\n// Handling guidance: Review the logs and entities involved with the incident. If it's not an authorized security testing, escalate to Endpoint security team for incident response\r\n//\r\n// MITRE ATT&CK Reference: https://attack.mitre.org/techniques/T1558/\r\nDeviceFileEvents\r\n| where FileName endswith \".kirbi\" or PreviousFileName endswith \".kirbi\" or FolderPath contains \".kirbi\"\r\n| extend Hostname = trim_end(@\"\\..+\",DeviceName)\r\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1558"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Kerberos ticket files (.kirbi) being created/modified on {{Hostname}} by {{InitiatingProcessAccountName}}",
+                    "alertDescriptionFormat": "Kerberos ticket files (.kirbi) are of interest to adversaries as they can contain sensitive data such as NTLM hashes that can be cracked offline. \n\nTo perform these attacks, a unique file extension variable is defined within Mimikatz that designates the default extension as .kirbi. \n\nModification of files with this extension can be a telltale sign that an adversary is in the midst of performing an attack (\"Kerberoasting\")\n\nInitiatingProcessAccountName: {{InitiatingProcessAccountName}}\n\nFolderPath: {{FolderPath}}\n\nFileName: {{FileName}}"
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "Hostname"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

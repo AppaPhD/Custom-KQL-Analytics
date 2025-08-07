@@ -1,0 +1,99 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/68bd0900-98a5-4d2e-86b2-f62b8ae8dcdc')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/68bd0900-98a5-4d2e-86b2-f62b8ae8dcdc')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Persistence: Suspicious .lnk file was called from startup folder",
+                "description": "This analytic looks for startup folder modifications involving a .lnk file cross referenced with unsigned SHA1 file hashes and network connection events to suspicious sites after persistence insertion\n\nHandling Guidance:\n1. Check that the program being run is trusted, look up the file hash, google search the name of the file. If the inventory count is low among the org, its probably suspicious\n2. Reach out to the user involved to confirm if they intended to make the program run at startup",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributors: Samuel Liu\r\n// Reviewer:\r\n// Description:\t\r\n// This analytic looks for startup folder modifications involving a .lnk file cross referenced with unsigned SHA1 file hashes and network connection events to suspicious sites after persistence insertion\r\n// \r\n// Handling Guidance:\r\n//      1. Check that the program being run is trusted, look up the file hash, google search the name of the file. If the inventory count is low among the org, its probably suspicious\r\n//      2. Reach out to the user involved to confirm if they intended to make the program run at startup\r\n//\r\n// Change Log:\r\n// 4/9/24 - First Draft\r\n// 5/3/24 - Removed summarize grouping\r\n//\r\n//let lookback = ago(45d); //this is mainly used for testing purposes\r\nlet nan = todatetime(0);\r\nlet prevalence_data = (\r\nDeviceFileEvents\r\n| where TimeGenerated > ago(60d)\r\n| where FileName endswith \".lnk\"\r\n| summarize Prevalence = count_distinct(DeviceName) by FileName);\r\nlet timeseries_dataset = (\r\nDeviceNetworkEvents\r\n| where TimeGenerated > ago(3d)\r\n| extend direction_ = tostring(AdditionalFields.direction)\r\n| extend subject_CN = tostring(AdditionalFields.subject)\r\n| extend ParsedCNAME = coalesce(\r\n    extract(@\"CN=(.*?),O=\", 1, subject_CN),\r\n    tostring(AdditionalFields.query))\r\n| project TimeGenerated, InitiatingProcessCommandLine, DeviceName, RemoteIP, RemoteUrl, RemotePort, Protocol, ParsedCNAME);\r\nDeviceFileEvents\r\n| union DeviceProcessEvents\r\n| where TimeGenerated > ago(5h)\r\n| where ProcessCommandLine contains \"\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\\" or FolderPath contains \"\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\\" //looks for where the startup folder is targeted in the commandline\"\r\n| where ProcessCommandLine contains \".lnk\" or FileName endswith \".lnk\"//looks for where .lnk files are involved\"\r\n| where FileName !contains \"msedge.exe\" and FileName !contains \"chrome.exe\" and FileName !contains \"OneNote\" and FileName !contains \"std_VDI_rules\" and FileName !contains \"setwallpaper\"//browser .lnk files are excluded, they are benign usually\"\r\n| project TimeGenerated, AccountName, DeviceName, ProcessCommandLine, InitiatingProcessCommandLine, FileName, InitiatingProcessFileName, InitiatingProcessSHA1, FolderPath, InitiatingProcessFolderPath, InitiatingProcessSignatureStatus, InitiatingProcessSignerType\r\n| project-rename target_SHA = InitiatingProcessSHA1\r\n//see if we can join the target_SHA with certificate info\r\n| join kind=leftouter prevalence_data on FileName\r\n| where Prevalence < 3\r\n| join kind=leftouter timeseries_dataset on InitiatingProcessCommandLine, DeviceName\r\n| extend TimeGenerated1 = coalesce(TimeGenerated1, nan)\r\n| project-reorder TimeGenerated, TimeGenerated1 \r\n| extend ConnectionTime = iff((TimeGenerated1 > TimeGenerated and TimeGenerated1 < datetime_add('minute',60,TimeGenerated)), TimeGenerated1, nan)\r\n| where TimeGenerated1 > TimeGenerated\r\n| project-reorder TimeGenerated, TimeGenerated1 \r\n| project-away DeviceName1, InitiatingProcessCommandLine1, target_SHA, AccountName\r\n| project-rename PotentialC2Beacon = RemoteUrl\r\n",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Persistence: {{DeviceName}}  called a suspicious .lnk file from startup folder",
+                    "alertDescriptionFormat": "User called a suspicious .lnk file using commandline from {{DeviceName}}  \n\nHandling Guidance:\n1. Check that the program being run is trusted, look up the file hash, google search the name of the file. If the inventory count is low among the org, its probably suspicious\n2. Reach out to the user involved to confirm if they intended to make the program run at startup, if not then check with the systems team to see if they rolled out any new lnk files at startup.\n3. If none of the things are confirmed above, this will require a deeper analysis and escalation.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "PotentialC2Beacon"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "InitiatingProcessCommandLine"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

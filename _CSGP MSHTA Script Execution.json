@@ -1,0 +1,97 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/972cb945-927a-4d96-b345-a1402fa58cb5')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/972cb945-927a-4d96-b345-a1402fa58cb5')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: MSHTA Script Execution",
+                "description": "Description: This alert detects when the mshta.exe process has an atypical parent process. \n Handling guidance: Contact the user in question to determine the reason for the execution.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//MSHTA Script Execution\n//\n//Contributor: Kamran Ahmadjan\n//Reviewer: Grover Mewborn\n//References: https://redcanary.com/threat-detection-report/techniques/mshta/ \n//Description: This alert detects when the mshta.exe process has an atypical parent process. \n//Handling guidance: Contact the user in question to determine the reason for the execution. \n//\n// Change notes\n// ------------\n// \n//Query:\nlet Exclusions = dynamic([\"\\\\usweb\\\\itops\\\\SysScripts\\\\\", \"\\\\CSGP.Systems.Scripts\\\\ActiveDirectory\\\\\", \"MemberOf_Report_V2.hta\", \"\\\\DeploymentScripts\\\\Wizard.hta\"]);\nDeviceProcessEvents\n| where FileName == \"mshta.exe\"\n| where MachineGroup != \"Workstations: Red Team\" and not(AccountName == \"administrator\" or AccountName == \"bmercedes\")\n| where ProcessCommandLine has_any(\"javascript\", \"html\", \"hta\", \"vbscript\", \"http\", \".htm\")\n| where not(InitiatingProcessFolderPath == \"c:\\\\windows\\\\system32\\\\wscript.exe\")\n| where InitiatingProcessFolderPath !startswith \"c:\\\\program files\\\\hp\\\\\"\n| where not(AccountName == \"mbrown\" and ProcessCommandLine has \"LoadRunner\")\n| where not(ProcessCommandLine has_any(Exclusions))\n| project\n    TimeGenerated,\n    AccountName,\n    ProcessCommandLine,\n    InitiatingProcessParentFileName,\n    InitiatingProcessFolderPath,\n    FileName,\n    DeviceName,\n    MachineGroup,\n    InitiatingProcessAccountName",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1218"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

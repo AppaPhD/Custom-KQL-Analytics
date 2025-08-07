@@ -1,0 +1,64 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8067bf5c-26b9-4933-84dc-0555b983f8f5')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8067bf5c-26b9-4933-84dc-0555b983f8f5')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Sentinel Health - ZPA",
+                "description": "",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Lucas Trainer\r\n// Source:  NA\r\n// Reviewer: Kevin Cleavinger & Sam Liu\r\n//\r\n// Description: This analytic rule identifies when ZPA has stopped sending. If there are no results found, then ZPA logs are functioning as expected. If there are results, then follow the handling guidance below.\r\n//\r\n// Handling Guidance: Run the log analytics troubleshooter on the ZPA log fowrarder (CG01SIEMOPS116) - sudo /opt/microsoft/omsagent/bin/troubleshooter.  Often failures from log analytics agents are due to versions falling behind. If the troubleshooter identifies that an update is available, apply the update. \r\n//\r\n// Query: \r\nlet logThreshold_ = 1; //Max number of hours we tolerate not recieving a log from a source\r\nunion ZPA_UserActivity_CL, ZPA_UserStatus_CL\r\n| where TimeGenerated >= ago(14d)\r\n| summarize last_log = datetime_diff(\"second\", now(), max(TimeGenerated)) by Type\r\n// 28,800 = 8 hrs, 14,400 = 4 hrs, 3600 seconds = 1 hr\r\n| where last_log > 14400\r\n| extend last_log_hr = last_log / 3600\r\n| extend LastEntry = strcat(Type, \"- \", \": \", last_log_hr, \" hours since last log entry\")\r\n| project Type, LastEntry, last_log_hr\r\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1565"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Sentinel Health - ZPA",
+                    "alertDescriptionFormat": "{{{LastEntry}} \n\nHandling Guidance: \nRefer to ZPA Log Ingestion documentation: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/207886295/Zscaler+ZPA+-+Sentinel+Logging\n\nPossible remediation steps:\n-Restart ZPA Log forwarder cg01siemops116\n-Run tcpdump to verify that logs are hitting cg01siemops116 from ZPA\n-Look for issues with Syslog or the AMA on cg01siemops116 - run the troubleshooter:\nSee: https://learn.microsoft.com/en-us/azure/azure-monitor/agents/azure-monitor-agent-troubleshoot-linux-vm \n\nPossible Root Causes to Investigate:\n-AMA agent has fallen behind in versioning. [update AMA via Azure portal - Arc]\n-Network changes have interfered with log forwarding [investigate with Network Diagnostics}\n-ZScaler server has run into issues - IAM will need to reboot [identify by no logs hitting tcpdump]\n-Timestamp issues on the forarder server [identify via mdsd.err log file - see confluence guide]",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b1ea8480-2456-48e2-a9d8-360cee0e526e')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b1ea8480-2456-48e2-a9d8-360cee0e526e')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: Process Execution from World Writeable Directory",
+        "description": "Looks for suspicious process execution in world writeable directories.\n\nTTPs: ['T1053', 'T1219','T1211']\n\nHandling Guidance:\n1. Check where/when/how the process was executed. If its a suspicious looking process or file name, then get another person to check it out\n2. Reach out to confirm with the user that this was intentionally done by them, if they respond that it was not intentional, then escalate to a senior immediately.",
+        "severity": "Low",
+        "enabled": true,
+        "query": "// Contributors: Samuel Liu\n// Reviewers: Grover Mewborn and Wajahat Malik\n//\n// Description: Looks for suspicious processes executions from sensitive directories. Different types of directories have different levels of severity. Exclusions are in place for highly noisy sources\n//\n// References: This is an analytic rule drafted in response to the PRC article https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-190a?utm_source=GovDelivery&utm_medium=alert&utm_campaign=PRC\n// Change Log\n// 9/17/24 - Samuel Liu - Tuned out jetbrains for slovely cuz hes a legit dev\n// 11/12/24 - Grover Mewborn - “contains” switched to “has” and similar changes. Altered regex to be more efficient by matching on literals.\n// 12/20/24 - Adrian Shina - added \"ActivityViewer2012.exe\" to the allowlist. Application used by STR - Adam McDonald, expected to be run from Public\\Desktop to show active queries that are running on ssas multidimensional cube server.\n// 03/03/25 - Wajahat Malik - Excluded Citrix signed files as they are use for VDA/VDI setups\nlet excludedUsers = dynamic([\"a_ganderson\", \"a_smitra\", \"a_mhailemariam\", \"a_ransary\", \"0_gaustin\"]);\nlet known_parent = dynamic([\"dismhost.exe\", \"esif_uf.exe\", \"vmtoolsd.exe\", \"cwainstaller.exe\", \"trolleyexpress.exe\", \"winsdksetup.exe\", \"snagit.exe\", \"Bootstrapper.exe\", \"BCILauncher.EXE\"]);\nlet allowlist = dynamic([ //Exclude filenames of commonly executed software run from world writeable directories. \n    \"Snagit23Update.exe\", \n    \"dotnetcore_x64.exe\", \n    \"Azure ATP Sensor Setup.exe\", \n    \"WirelessSetup.exe\", \n    \"IntelArcControl.exe\", \n    \"devcon_win64.exe\",  //DevCon is observed when Service Desk supports users with Driver installs, especially for cellular connectivity on laptops. \n    \"TrustedInstaller.exe\", \n    \"certmgr_win64.exe\", \n    \"BingChatInstaller.exe\", \n    \"SystemSettings.exe\", \n    \"SupportAssistInstaller.exe\", \n    \"SpeechUXWiz.exe\", \n    \"JetBrains\",\n    \"ActivityViewer2012.exe\"\n    ]);\nlet temp_folder_processes = (DeviceProcessEvents\n    | where FolderPath startswith \"C:\\\\Windows\\\\Temp\"\n    | where InitiatingProcessAccountName !in (\"system\", \"network service\", \"système\") and AccountName != \"system\"\n    | where not(FileName has_any (known_parent)) \n    | where not(FolderPath matches regex @\"C:\\\\Windows\\\\[Tt]emp\\\\{[0-9A-F]{8}\")\n    | extend alert_type = \"temp_folder_processes\")\n    | join kind=leftouter DeviceFileCertificateInfo on $left.SHA1 == $right.SHA1; //Add FileCertificate Info for more resilient allow-list;\nlet non_temp_processes = (DeviceProcessEvents\n    | where InitiatingProcessAccountName != \"system\" and InitiatingProcessAccountName != \"système\" //exclusions\n    | where InitiatingProcessFileName != \"sapisvr.exe\"\n    | where FolderPath has_any(':\\\\$Recycle.Bin\\\\', ':\\\\AMD\\\\Temp\\\\', ':\\\\Intel\\\\', ':\\\\PerfLogs\\\\', ':\\\\Windows\\\\addins\\\\', ':\\\\Windows\\\\appcompat\\\\', ':\\\\Windows\\\\apppatch\\\\', ':\\\\Windows\\\\AppReadiness\\\\', ':\\\\Windows\\\\bcastdvr\\\\', ':\\\\Windows\\\\Boot\\\\', ':\\\\Windows\\\\Branding\\\\', ':\\\\Windows\\\\CbsTemp\\\\', ':\\\\Windows\\\\Containers\\\\', ':\\\\Windows\\\\csc\\\\', ':\\\\Windows\\\\Cursors\\\\', ':\\\\Windows\\\\debug\\\\', ':\\\\Windows\\\\diagnostics\\\\', ':\\\\Windows\\\\DigitalLocker\\\\', ':\\\\Windows\\\\dot3svc\\\\', ':\\\\Windows\\\\en-US\\\\', ':\\\\Windows\\\\Fonts\\\\', ':\\\\Windows\\\\Globalization\\\\', ':\\\\Windows\\\\Help\\\\', ':\\\\Windows\\\\IdentityCRL\\\\', ':\\\\Windows\\\\IME\\\\', ':\\\\Windows\\\\ImmersiveControlPanel\\\\', ':\\\\Windows\\\\INF\\\\', ':\\\\Windows\\\\intel\\\\', ':\\\\Windows\\\\L2Schemas\\\\', ':\\\\Windows\\\\LiveKernelReports\\\\', ':\\\\Windows\\\\Logs\\\\', ':\\\\Windows\\\\media\\\\', ':\\\\Windows\\\\Migration\\\\', ':\\\\Windows\\\\ModemLogs\\\\', ':\\\\Windows\\\\ms\\\\', ':\\\\Windows\\\\OCR\\\\', ':\\\\Windows\\\\panther\\\\', ':\\\\Windows\\\\Performance\\\\', ':\\\\Windows\\\\PLA\\\\', ':\\\\Windows\\\\PolicyDefinitions\\\\', ':\\\\Windows\\\\Prefetch\\\\', ':\\\\Windows\\\\PrintDialog\\\\', ':\\\\Windows\\\\Provisioning\\\\', ':\\\\Windows\\\\Registration\\\\CRMLog\\\\', ':\\\\Windows\\\\RemotePackages\\\\', ':\\\\Windows\\\\rescache\\\\', ':\\\\Windows\\\\Resources\\\\', ':\\\\Windows\\\\SchCache\\\\', ':\\\\Windows\\\\schemas\\\\', ':\\\\Windows\\\\security\\\\', ':\\\\Windows\\\\ServiceState\\\\', ':\\\\Windows\\\\servicing\\\\', ':\\\\Windows\\\\Setup\\\\', ':\\\\Windows\\\\ShellComponents\\\\', ':\\\\Windows\\\\ShellExperiences\\\\', ':\\\\Windows\\\\SKB\\\\', ':\\\\Windows\\\\TAPI\\\\', ':\\\\Windows\\\\Tasks\\\\', ':\\\\Windows\\\\TextInput\\\\', ':\\\\Windows\\\\tracing\\\\', ':\\\\Windows\\\\Vss\\\\', ':\\\\Windows\\\\WaaS\\\\', ':\\\\Windows\\\\Web\\\\', ':\\\\Windows\\\\wlansvc\\\\', ':\\\\Windows\\\\System32\\\\Com\\\\dmp\\\\', ':\\\\Windows\\\\System32\\\\FxsTmp\\\\', ':\\\\Windows\\\\System32\\\\Microsoft\\\\Crypto\\\\RSA\\\\MachineKeys\\\\', ':\\\\Windows\\\\System32\\\\Speech\\\\', ':\\\\Windows\\\\System32\\\\spool\\\\drivers\\\\color\\\\', ':\\\\Windows\\\\System32\\\\spool\\\\PRINTERS\\\\', ':\\\\Windows\\\\System32\\\\spool\\\\SERVERS\\\\', ':\\\\Windows\\\\System32\\\\Tasks_Migrated\\\\Microsoft\\\\Windows\\\\PLA\\\\System\\\\', ':\\\\Windows\\\\System32\\\\Tasks\\\\', ':\\\\Windows\\\\SysWOW64\\\\Com\\\\dmp\\\\', ':\\\\Windows\\\\SysWOW64\\\\FxsTmp\\\\', ':\\\\Windows\\\\SysWOW64\\\\Tasks\\\\')\n    | extend alert_type = \"non_temp_processes\")\n    | join kind=leftouter DeviceFileCertificateInfo on $left.SHA1 == $right.SHA1; //Add FileCertificate Info for more resilient allow-list;\nlet user_processes = (DeviceProcessEvents\n    | where FolderPath !has \"\\\\AppData\\\\\"\n    | where InitiatingProcessAccountName != \"system\"\n    | where FolderPath has_any(':\\\\Users\\\\All Users\\\\', ':\\\\Users\\\\Contacts\\\\', ':\\\\Users\\\\Default\\\\', ':\\\\Users\\\\Public\\\\', ':\\\\Users\\\\Searches\\\\')\n    | extend alert_type = \"user_processes\")\n    | join kind=leftouter DeviceFileCertificateInfo on $left.SHA1 == $right.SHA1; //Add FileCertificate Info for more resilient allow-list;\nunion temp_folder_processes, non_temp_processes, user_processes\n| where not(FileName has_any(allowlist) or InitiatingProcessFileName has_any (allowlist))\n| where not(AccountName has_any (excludedUsers))\n| where InitiatingProcessFileName <> \"PulseUninstall.exe\" //Exclude Pulse Secure VPN uninstalls\n| where SignerHash <> \"bf7132a234431e953814a610d5a1185029f3a711\" //Exclude code signed by Dell\n| where ProcessVersionInfoFileDescription <> \"Dell Pair Installer\" //Exclude Dell Pair installer for bluetooth pairings\n| extend severity = case(\n                        FolderPath contains \"\\\\temp\",\n                        \"Low\",\n                        FolderPath contains \"\\\\users\",\n                        \"Low\",\n                        \"Medium\"\n                    )\n| summarize\n    by\n    ApproxTime = bin(TimeGenerated, 10m),\n    AccountName,\n    AccountUpn,\n    DeviceName,\n    FileName,\n    Signer,\n    SignerHash,\n    FolderPath,\n    InitiatingProcessFileName,\n    InitiatingProcessFolderPath,\n    InitiatingProcessVersionInfoFileDescription,\n    InitiatingProcessParentFileName,\n    alert_type\n| where (Signer != \"Citrix Systems, Inc.\" and SignerHash != \"e3f646bd27e139de1b03243eb3a16f7802347445\")//excluding VDA setup files\n| where InitiatingProcessVersionInfoFileDescription !has \"Podman\" //excluding podman for the software devs\n| where InitiatingProcessParentFileName !has \"lghub_setup.exe\"\n| order by ApproxTime asc",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": ["Execution","Persistence","CommandAndControl"],
+        "techniques": [],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT2H",
+            "matchingMethod": "Selected",
+            "groupByEntities": ["Account"],
+            "groupByAlertDetails": ["DisplayName"],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Unusual Process Execution from {{DeviceName}}  in {{FolderPath}} ",
+          "alertDescriptionFormat": "Device {{DeviceName}} executed process {{InitiatingProcessParentFileName}}  in writeable directory {{FolderPath}} in a suspicious way.\n\nHandling Guidance: Look at the file that started the process and verify its legit. Reach out the user if still unsure and ask about the process running. Determine what type of directory this is.",
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": [{"entityType":"Account","fieldMappings":[{"identifier":"Name","columnName":"AccountName"}]},{"entityType":"File","fieldMappings":[{"identifier":"Directory","columnName":"FolderPath"},{"identifier":"Name","columnName":"FileName"}]}],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

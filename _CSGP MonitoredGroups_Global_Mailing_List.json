@@ -1,0 +1,74 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c89bd418-8785-4753-8be6-2f404aa3be51')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c89bd418-8785-4753-8be6-2f404aa3be51')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: MonitoredGroups_Global_Mailing_List",
+                "description": "This query tracks changes performed on any of the specified Global Mailing List distro groups. This rule will ONLY create alerts and if a change is made, will be forwarded to the logic app: Notify-Global_Mailing_List_Changes which will email various directors. Reference https://servicedesk.costargroup.com/issues/?filter=-1 \n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Contributor: James Kim\r\n// Reviewer: \r\n//\r\n// Description: This query tracks changes performed on any of the specified Global Mailing List distro groups. This rule will ONLY create alerts and if a change is made, will be forwarded to the logic app: Notify-Global_Mailing_List_Changes which will email various directors. Reference https://servicedesk.costargroup.com/issues/?filter=-1\r\n//\r\n// Handling Guidance: N/A\r\n//\r\n// Change Log:\r\n// 10/15/2024 - James Kim - Intial Version\r\nlet MonitoredGroups = dynamic(['AdelaideMailingListAllowedSenders', 'ArlingtonMailingListAllowedSenders', 'AtlantaMailingListAllowedSenders', 'AustinMailingListAllowedSenders', 'BaltimoreMailingListAllowedSenders', 'BeijingMailingListAllowedSenders', 'BerlinMailingListAllowedSenders', 'BirminghamMailingListAllowedSenders', 'Birmingham?UK?MailingListAllowedSenders', 'BogotaMailingListAllowedSenders', 'BostonMailingListAllowedSenders', 'BristolMailingListAllowedSenders', 'BroomfieldMailingListAllowedSenders', 'BrusqueMailingListAllowedSenders', 'CharlotteMailingListAllowedSenders', 'CharlottesvilleMailingListAllowedSenders', 'ChicagoMailingListAllowedSenders', 'CincinnatiMailingListAllowedSenders', 'ClaytonMailingListAllowedSenders', 'ClevelandMailingListAllowedSenders', 'ColumbusMailingListAllowedSenders', 'CostarAllAllowedSenders', 'AustraliaMailingListAllowedSenders', 'BrazilMailingListAllowedSenders', 'CanadaMailingListAllowedSenders', 'ChinaMailingListAllowedSenders', 'ColombiaMailingListAllowedSenders', 'FranceMailingListAllowedSenders', 'GermanyMailingListAllowedSenders', 'IndonesiaMailingListAllowedSenders', 'IrelandMailingListAllowedSenders', 'ItalyMailingListAllowedSenders', 'JapanMailingListAllowedSenders', 'SingaporeMailingListAllowedSenders', 'SpainMailingListAllowedSenders', 'UnitedKingdomMailingListAllowedSenders', 'UnitedArabEmiratesMailingListAllowedSenders', 'UnitedStatesMailingListAllowedSenders', 'DallasMailingListAllowedSenders', 'DenverMailingListAllowedSenders', 'DubaiMailingListAllowedSenders', 'FlorhamParkMailingListAllowedSenders', 'FrankfurtamMainMailingListAllowedSenders', 'FreiburgCityMailingListAllowedSenders', 'FreiburgimBreisgauMailingListAllowedSenders', 'FreiburgMailingListAllowedSenders', 'Ft.LauderdaleMailingListAllowedSenders', 'GlasgowMailingListAllowedSenders', 'GuangzhouMailingListAllowedSenders', 'HamburgMailingListAllowedSenders', 'HendersonvilleMailingListAllowedSenders', 'HomeBasedArgentinaMailingListAllowedSenders', 'HomeBasedAustraliaMailingListAllowedSenders', 'HomeBasedCanadaMailingListAllowedSenders', 'HomeBasedChinaMailingListAllowedSenders', 'HomeBasedColombiaMailingListAllowedSenders', 'HomeBasedFranceMailingListAllowedSenders', 'HomeBasedGermanyMailingListAllowedSenders', 'HomeBasedGlobalMailingListAllowedSenders', 'HomeBasedIrelandMailingListAllowedSenders', 'HomeBasedItalyMailingListAllowedSenders', 'HomeBasedSpainMailingListAllowedSenders', 'HomeBasedUKMailingListAllowedSenders', 'HomeBasedUnitedKingdomMailingListAllowedSenders', 'HomeBasedUnitedStatesMailingListAllowedSenders', 'HomeBasedUSMailingListAllowedSenders', 'HoustonMailingListAllowedSenders', 'IndianapolisMailingListAllowedSenders', 'IrvineMailingListAllowedSenders', 'JakartaMailingListAllowedSenders', 'KansasCityMailingListAllowedSenders', 'LondonMailingListAllowedSenders', 'LosAngelesMailingListAllowedSenders', 'MadridMailingListAllowedSenders', 'ManchesterMailingListAllowedSenders', 'MelvilleMailingListAllowedSenders', 'MiamiMailingListAllowedSenders', 'MilanMailingListAllowedSenders', 'MinneapolisMailingListAllowedSenders', 'MunichMailingListAllowedSenders', 'NewYorkMailingListAllowedSenders', 'NorfolkMailingListAllowedSenders', 'OntarioMailingListAllowedSenders', 'OrlandoMailingListAllowedSenders', 'ParisMailingListAllowedSenders', 'PhiladelphiaMailingListAllowedSenders', 'PhoenixMailingListAllowedSenders', 'PittsburghMailingListAllowedSenders', 'PortlandMailingListAllowedSenders', 'RaleighMailingListAllowedSenders', 'RichmondMailingListAllowedSenders', 'SacramentoMailingListAllowedSenders', 'SaltLakeCityMailingListAllowedSenders', 'SanAntonioMailingListAllowedSenders', 'SanDiegoMailingListAllowedSenders', 'SanFranciscoMailingListAllowedSenders', 'SeattleMailingListAllowedSenders', 'ShanghaiMailingListAllowedSenders', 'Shibuya-kuMailingListAllowedSenders', 'SingaporeCityMailingListAllowedSenders', 'SouthfieldMailingListAllowedSenders', 'TampaMailingListAllowedSenders', 'TorontoMailingListAllowedSenders', 'WashingtonMailingListAllowedSenders']);\r\nSecurityEvent\r\n| where Activity has \"group\" and (Activity has \"added\" or Activity has \"removed\")\r\n| where TargetAccount has_any (MonitoredGroups)\r\n| extend MemberUserName = extract(@\"(CN=)([^,]+)\", 2, MemberName)\r\n| project\r\n    TimeGenerated,\r\n    Actor = SubjectUserName,\r\n    Activity = split(Activity, '- ')[1],\r\n    MemberUserName,\r\n    GroupChanged = split(TargetUserName, '-')[0]\r\n| extend _AlertTitle = strcat(GroupChanged, \" Membership Changed\")\r\n| extend _AlertDescription = strcat(\r\n                                 \"Time Changed: \",\r\n                                 format_datetime(TimeGenerated, \"yyyy-MM-dd HH:MM\"),\r\n                                 \" UTC\",\r\n                                 \"|\",\r\n                                 \"Actor: \",\r\n                                 Actor,\r\n                                 \"|\",\r\n                                 \"Activity: \",\r\n                                 Activity,\r\n                                 \"|\",\r\n                                 \"Member User Name: \",\r\n                                 MemberUserName,\r\n                                 \"|\",\r\n                                 \"Group Changed: \",\r\n                                 GroupChanged,\r\n                                 \"\\n\"\r\n                             )\r\n| extend _HandlingGuidance = strcat(\r\n                                 \"Evaluate the group membership change identified and who performed the changed.\\n\",\r\n                                 \"Contact the admin who performed the group membership change, and validate that the membership change was approved.\"\r\n                             )\r\n| project-reorder _AlertTitle, _AlertDescription, _HandlingGuidance",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1069"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{_AlertTitle}}",
+                    "alertDescriptionFormat": "{{_AlertDescription}}",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "SecurityGroup",
+                        "fieldMappings": [
+                            {
+                                "identifier": "SID",
+                                "columnName": "GroupChanged"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

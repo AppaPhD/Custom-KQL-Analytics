@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/cc362116-3e36-4071-b832-98d9914c7d15')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/cc362116-3e36-4071-b832-98d9914c7d15')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: RDP Connections to Anomalous Public Destinations",
+        "description": "Description: This query searches for outbound RDP connections made from mstsc.exe to non-CoStar IPs. Connections to EC2s and Microsoft datacenters are typical.\nHandling Guidance: Investigate the IP that was connected to and determine whether it is legitimate usage (company portals, internal servers, testing, etc.). If legitimate activity is confirmed, add the IP to the exclusions in this rule. If unexpected, isolate the device and consider blocking the IP.",
+        "severity": "Low",
+        "enabled": true,
+        "query": "// Contributor: James Kim\n// Reviewer: Lucas Trainer\n//\n// Description: This query searches for outbound RDP connections made from mstsc.exe to non-CoStar IPs. Connections to EC2s and Microsoft datacenters are typical.\n// Handling Guidance: Investigate the IP that was connected to and determine whether it is legitimate usage (company portals, internal servers, testing, etc.). If legitimate activity is confirmed, add the IP to the exclusions in this rule. If unexpected, isolate the device and consider blocking the IP.\n// Reference: https://www.huntress.com/blog/silencing-the-edr-silencers\n//\n// Change notes\n// ------------\n// 12/17/2024 -- Original Version\n// 12/19/2024 -- Adrian Shina - added Microsoft Datacenter IP to exclusions\n// 1/27/25 -- Anthony Edelstein -- Added IP to Entity Mapping so the external IP would populate in the alert details.\n// 3/7/25 -- James Kim -- re-implemented Microsoft data centers; mstsc does not inherently connect to a Microsoft data center unless you are specifically accessing a remote desktop hosted on Microsoft's Azure cloud platform\n// 5/12/25 -- James Kim -- Exempted AWS Global Accelerator, this service improves the performance and reliability of your RDP connections by routing traffic to the nearest, fastest endpoints when connecting over long distance.\nlet exclusions = dynamic(['login.microsoftonline.com', 'ctldl.windowsupdate.com' 'login.windows.net', 'login.live.com', 'ctldl.windowsupdate.com']); //Microsoft sites to exclude\nlet ipExclude = dynamic([\"127.0.0.1\", \"127.0.0.2\", \"127.0.0.3\", \"8.8.8.8\", \"8.8.4.4\"]); //exclude loopback address\nlet zscaler =  _GetWatchlist('Zscaler_Public_IP_Ranges')\n    | project IP, Source;\nlet costar_ips = _GetWatchlist('Costar_Public_IP_Ranges')\n    | project IP = cidr, Source = name;\nlet ZscalerExclusion = '100.64.0.0/16';\nDeviceNetworkEvents\n| where RemoteIPType == \"Public\"\n| where not(RemoteUrl has_any (exclusions))\n| where not(RemoteIP has_any (ipExclude))\n| where InitiatingProcessFileName has \"mstsc.exe\"\n| where not (ipv4_is_private(RemoteIP))\n| where not (ipv4_is_in_range(RemoteIP, ZscalerExclusion))\n| evaluate ipv4_lookup(zscaler, RemoteIP, IP, return_unmatched = true) //lookup in zscaler watchlist\n| evaluate ipv4_lookup(costar_ips, RemoteIP, IP, return_unmatched = true) //lookup in office network watchlist\n| extend Destination = iff(isempty(Source), \"Non-Trusted\", Source)\n| where Destination == \"Non-Trusted\" //only eval non-trusted sources\n//Specific exclusions\n| where InitiatingProcessAccountName !in ('vmarinov') //Typical testers\n| where RemoteIP !in (\"18.144.81.119\", \"50.18.93.173\", \"54.219.170.181\", \"54.176.201.122\", \"54.88.216.14\") //EC2s\n| where RemoteIP <> \"109.73.126.149\" //12-12-24: OTM Saga Server - Anastasios is in the procress of migrating this to reston\n| where RemoteIP <> \"52.18.212.84\" //12-12-24: remote.teamcity.property-portal.uk - This is an EC2 to the property portal\n| where RemoteIP <> \"36.86.63.182\" //12-12-24: ushenprdssrv016.str.wwstar.com - STR address\n| where RemoteIP <> \"34.250.179.183\" //12-12-24: remote.testalettings.property-portal.uk - UK property portal\n| where RemoteIP <> \"74.115.43.80\" //12-12-24: costarrealt.rmo.rentmanager.com - rent manager\n| where RemoteIP <> \"143.244.220.150\" //12-12-24: ld04webxprd001 - Lands web server \n| where RemoteIP <> \"208.91.197.132\" //02-11-25: This IP is from Confluence and gets multiple hits (jkim2)\n| where RemoteIP !in (\"172.179.242.50\", \"172.178.38.215\") //03-07-25: Microsoft Datacenters\n| where RemoteIP !in(\"13.248.169.48\", \"76.223.54.146\") //05-12-25: AWS Global Accelerator\n//End\n| order by TimeGenerated desc \n| summarize make_set(DeviceName, 50), make_set(InitiatingProcessAccountName, 50) by RemoteIP, RemotePort, RemoteUrl, ActionType, InitiatingProcessFileName\n| extend UserConnections = array_length(set_InitiatingProcessAccountName)",
+        "queryFrequency": "PT2H",
+        "queryPeriod": "PT2H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": ["CommandAndControl"],
+        "techniques": ["T1219"],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": null,
+        "customDetails": {},
+        "entityMappings": [{"entityType":"Host","fieldMappings":[{"identifier":"HostName","columnName":"set_DeviceName"}]},{"entityType":"Account","fieldMappings":[{"identifier":"Name","columnName":"set_InitiatingProcessAccountName"}]},{"entityType":"IP","fieldMappings":[{"identifier":"Address","columnName":"RemoteIP"}]}],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

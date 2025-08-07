@@ -1,0 +1,113 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/363658bf-ffbd-4d4b-b49c-67fda46f7cb3')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/363658bf-ffbd-4d4b-b49c-67fda46f7cb3')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT15M",
+        "queryPeriod": "PT15M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {
+          "sus_child_type": "alert_type"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "ProcessCommandLine"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "DeviceName"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "FileName"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingProcessFileName"
+              },
+              {
+                "identifier": "Directory",
+                "columnName": "InitiatingProcessFolderPath"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Suspicious {{alert_type}} process spawned from trusted windows tool",
+          "alertDescriptionFormat": "Alert generated from {{DeviceName}} \n\nA legitimate windows program spawned a suspicious child file: {{FileName}} from the folder path {{FolderPath}} \n\nPlease reach out to the user to confirm whether this was expected activity. ",
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "Execution"
+        ],
+        "techniques": [
+          "T1047"
+        ],
+        "subTechniques": [],
+        "displayName": "_CSGP: Suspicious child process spawned from windows program",
+        "enabled": true,
+        "description": "Adversaries may abuse legitimate windows programs and tool to spawn suspicious child process that can then carry out the intended attack. \n\nHandling Guidance: Reach out to user to determine whether this was initiated by the user and the business case if possible. \n\nFor wmi childs, the InitiatingProcessFolderPath should always be windows\\system32\\wbem\\wmiprvse.exe otherwise it's a strong indication of malicious activity.",
+        "alertRuleTemplateName": null,
+        "query": "// Contributor: Mandiant\n// Reviewer: James Kim, Samuel Liu\n// Reference: //https://github.com/fireeye/red_team_tool_countermeasures/blob/master/rules/UNCATEGORIZED/production/hxioc/DISM.EXE SUSPICIOUS CHILD PROCESSES (METHODOLOGY).ioc\n//\n// Description: This alert looks for suspicious child processes of werfault.exe, a known process used by malicious actors for process injection.\n// Handling Guidance: Contact the user to determine if the activity is expected or regular business activity. Isolate the device if necessary. Investigate the device timeline and running processes. \n//\n// Change notes\n// ------------\n// 05/15/23 James Kim - Changed run frequency to every 4 hrs and updating formatting\n// 06/08/23 Obadiah Bridges - added handling guidance \n// 06/21/23 Obadiah & Dawinder - reverted query to original from source. tuned out false positives.\n// 5/2/25 Adrian Shina - filtered out FPs and cleaned up the code\n// 5/5/25 Samuel Liu - combined analytics that are similar in suspicious child processes\nlet lolbins = dynamic([\"At.exe\", \"Atbroker.exe\", \"Bash.exe\", \"Bitsadmin.exe\", \"CertReq.exe\", \"Certutil.exe\", \"Cmd.exe\", \"Cmdkey.exe\", \"Cmstp.exe\", \"Control.exe\", \"Csc.exe\", \"Cscript.exe\", \"Desktopimgdownldr.exe\", \"Dfsvc.exe\", \"Diantz.exe\", \"Diskshadow.exe\", \"Dnscmd.exe\", \"Esentutl.exe\", \"Eventvwr.exe\", \"Expand.exe\", \"Extexport.exe\", \"Extrac32.exe\", \"Findstr.exe\", \"Forfiles.exe\", \"Ftp.exe\", \"GfxDownloadWrapper.exe\", \"Gpscript.exe\", \"Hh.exe\", \"Ie4uinit.exe\", \"Ieexec.exe\", \"Ilasm.exe\", \"Infdefaultinstall.exe\", \"Installutil.exe\", \"Jsc.exe\", \"Makecab.exe\", \"Mavinject.exe\", \"Microsoft.Workflow.Compiler.exe\", \"Mmc.exe\", \"MpCmdRun.exe\", \"Msbuild.exe\", \"Msconfig.exe\", \"Msdt.exe\", \"Mshta.exe\", \"Msiexec.exe\", \"Netsh.exe\", \"Odbcconf.exe\", \"Pcalua.exe\", \"Pcwrun.exe\", \"Pktmon.exe\", \"Presentationhost.exe\", \"Print.exe\", \"Psr.exe\", \"Rasautou.exe\", \"Reg.exe\", \"Regasm.exe\", \"Regedit.exe\", \"Regini.exe\", \"Register-cimprovider.exe\", \"Regsvcs.exe\", \"Regsvr32.exe\", \"Replace.exe\", \"Rpcping.exe\", \"Rundll32.exe\", \"Runonce.exe\", \"Runscripthelper.exe\", \"Sc.exe\", \"Schtasks.exe\", \"Scriptrunner.exe\", \"SyncAppvPublishingServer.exe\", \"Ttdinject.exe\", \"Tttracer.exe\", \"vbc.exe\", \"Verclsid.exe\", \"Wab.exe\", \"Wmic.exe\", \"Wscript.exe\", \"Wsreset.exe\", \"Xwizard.exe\", \"AgentExecutor.exe\", \"Appvlp.exe\", \"Bginfo.exe\", \"Cdb.exe\", \"csi.exe\", \"Devtoolslauncher.exe\", \"dnx.exe\", \"Dotnet.exe\", \"Dxcap.exe\", \"Mftrace.exe\", \"Msdeploy.exe\", \"msxsl.exe\", \"ntdsutil.exe\", \"rcsi.exe\", \"Sqldumper.exe\", \"Sqlps.exe\", \"SQLToolsPS.exe\", \"Squirrel.exe\", \"te.exe\", \"Tracker.exe\", \"Update.exe\", \"Wsl.exe\", \"ipconfig.exe\", \"whoami.exe\", \"net.exe\", \"net1.exe\"]);\nlet excludedIPCmdLines = dynamic([\"Loadsavedwindows\",\"Teams.exe\",\".suodat\",\"restartManager\",\"ssms.exe\",\"OUTLOOK.EXE\",\"WINWORD.EXE\",\"devenv.exe\",\"Taskmgr.exe\"]);\nlet livingoffland = (DeviceProcessEvents\n| where (InitiatingProcessParentFileName == \"WerFault.exe\" or InitiatingProcessParentFileName == \"dism.exe\" or InitiatingProcessParentFileName == \"SearchProtocolHost.exe\") and FileName in~(lolbins)\n| where not(ProcessCommandLine contains \"\\\"rundll32.exe\\\" \\\"C:\\\\WINDOWS\\\\system32\\\\chakra.dll\\\",DumpDiagInfo\" or ProcessCommandLine contains \"WerFault.exe -u -p\")\n| where not(InitiatingProcessCommandLine has_any (excludedIPCmdLines))\n| summarize count()\n    by\n    DeviceName,\n    InitiatingProcessParentFileName,\n    InitiatingProcessFolderPath,\n    InitiatingProcessFileName,\n    FileName,\n    InitiatingProcessCommandLine,\n    ProcessCommandLine,\n    InitiatingProcessSignatureStatus\n| extend alert_type = \"living-off-land\");\nlet sus_wmiprvse_child = (DeviceProcessEvents\n| where InitiatingProcessFileName == \"wmiprvse.exe\"\n| where FileName !in (\"DismHost.exe\", \"WerFault.exe\", \"CtxSession.exe\") //Ignore error reporting binaries. Ignore Citrix\n| where not(DeviceName == \"ap01devodvm001.us.costar.local\" and FileName == \"csc.exe\") //Exepcted activity related to .NET compilation\n| where not(DeviceName == \"nvr-fwx7kd3\" and FileName == \"cmd.exe\") //Corp Sec network-video-recorder. Expected\n| where FileName != \"cuMonitor.exe\"\n| where not(AccountName == \"svcscannersvr\" and FileName == \"auditpol.exe\") // expected audit policy program activity by InsightVM\n| project\n    InitiatingProcessParentFileName,\n    InitiatingProcessFileName,\n    InitiatingProcessFolderPath,\n    AccountName,\n    DeviceName,\n    AccountUpn,\n    ActionType,\n    FileName,\n    FolderPath,\n    ProcessCommandLine,\n    ProcessVersionInfoCompanyName,\n    ProcessVersionInfoFileDescription\n| extend alert_type = \"wmi_child\");\nunion livingoffland, sus_wmiprvse_child\n| project-reorder alert_type\n// TODO: in analytic settings, add alert_type as an entity so that the alert shows up properly described."
+      }
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a24c4718-8de9-4a73-bcc8-a17e1cd3c865')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a24c4718-8de9-4a73-bcc8-a17e1cd3c865')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: O365 - Bulk Membership List Manipulation",
+                "description": "The Update-RoleGroupMember cmdlet enables you to replace the entire membership list for a role group or perform programmatic addition or removal of multiple members at a single time. Technique: T1098.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Obadiah \n// Source:  \n// Reviewer: \n//\n// Description: The Update-RoleGroupMember cmdlet enables you to replace the entire membership list for a role group or perform programmatic addition or removal of multiple members at a single time. Technique: T1098.\n// Handling Guidance:\n//\n// Change notes\n// ------------\n// 05/01/2023 Obadiah Bridges - Update boilerplate, handling guidance and moved to production. \n//\n// Query: \nOfficeActivity \n| where (Operation == \"Update-RoleGroupMember\")\n| extend IPCustomEntity = ClientIP\n| extend AccountCustomEntity = UserId",
+                "queryFrequency": "PT12H",
+                "queryPeriod": "PT12H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

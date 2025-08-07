@@ -1,0 +1,74 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/590902b9-4a2c-4efd-9b8a-b2e1d64748f7')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/590902b9-4a2c-4efd-9b8a-b2e1d64748f7')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Sentinel Health - CEF",
+                "description": "Detects health issues with sensors \n\nHandling Guidance: Notify Enterprise Defense Team to investigate with IAM; track to resolution",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Contributor: Cooper Yap\n// Source:  NA\n// Reviewer: Lucas Trainer\n//\n// Description: This analytic rule identifies when an expected CEF source has not sent a message to Sentinel recently. This may mean that there is a problem with the log forwarders, or the CEF source.  \n//\n// Handling Guidance: Identify the system owner for the CEF source. Is the system still operational? Is it correctly configured to send logs? Is there a problem with the log forwarding infrastructure? \n//\n// Change Log: 2/12/24 Commented out Thycotic as we don't gain much insight from these logs and they appear to intermittently stop logging. Anthony Edelstein\n// 2025/05/08 - Evgeniy Cralev - Removed CheckPoint as this is now decommissioned.\n// Query: \nlet logThreshold_ = 1; //Max number of hours we tolerate not recieving a log from a source\nlet deviceVendors_ = dynamic([\n    \"Ping Identity\",\n    //\"Thycotic Software\",\n    \"Palo Alto Networks\",\n    //\"Aruba Networks\",\n    \"Akamai\",\n    //\"Check Point\",\n    \"Hewlett Packard Enterprise\",\n    \"Zscaler\"\n    ]);\nCommonSecurityLog\n| where TimeGenerated > ago(14d)\n| where DeviceVendor in~ (deviceVendors_)\n| summarize last_log = datetime_diff(\"second\", now(), max(TimeGenerated))\n    by DeviceVendor\n// 28,800 = 8 hrs, 14,400 = 4 hrs, 3600 seconds = 1 hr\n//| where last_log > 14400\n| extend last_log_hr = last_log / 3600\n| extend LastEntry = strcat(DeviceVendor, \"- \", \": \", last_log_hr, \" hours since last log entry\")\n| extend Suppress = case(\n    (DeviceVendor == \"Thycotic Software\" and last_log_hr < 24), \"True\", //We allow 24 hr threshold logs from Thycotic\n    last_log_hr <= logThreshold_, \"True\",\n    \"False\")\n| where Suppress != \"True\" \n| project LastEntry, DeviceVendor, last_log_hr, Suppress\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1565"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Sentinel Health: {{LastEntry}}",
+                    "alertDescriptionFormat": "Sentinel log collection health issue: {{LastEntry}}\n\nThere may be a problem with the log source or forwarding infrastructure. \n\nCEF Architecture Reference:\nhttps://wiki.costargroup.com/display/SCSP/Azure+Sentinel+Log+Forwarder+Infrastructure ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "DeviceVendor"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

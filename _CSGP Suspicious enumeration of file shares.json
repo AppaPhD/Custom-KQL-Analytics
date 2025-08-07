@@ -1,0 +1,90 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/89d39344-7188-4ff8-80f5-2e8f206632a6')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/89d39344-7188-4ff8-80f5-2e8f206632a6')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Suspicious enumeration of file shares",
+                "description": "This query looks for users attempting to enumerate a large amount of shares (8000+) over port 445 within a 1 hour period.\n\nHandling Guidance: Reach out to user to confirm if they have performed any actions requiring a large number of SMB actions in the identified hour of the day.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: dsingh\r\n// Reviewer: jkim2\r\n// Reference: \r\n//\r\n// Description: CoStar has access to a large amount of shares which may contain sensitive information, this query looks for users attempting to enumerate a large amount of shares within a 1 hour period.\r\n// Handling Guidance: Reach out to user to confirm if they have performed any actions requiring a large number of SMB actions in the identified hour of the day.\r\n// Query Modifications: If a specific team seems to be triggering this alert often, add their title or department as an exclusion for this query\r\n//\r\n// Change notes\r\n// ------------\r\n// 07/31/23 James Kim - Initial version\r\n// 10/06/23 James Kim - Changed timeframe to per hour basis & threshold inscreased to > 8000\r\n// 02/29/23 James Kim - Optimized exclusions \r\nlet identity = IdentityInfo\r\n    | project User = AccountDisplayName, Department, JobTitle;\r\nlet exclude = dynamic([\"pprlnx3@us.costar.local\", \"gmsadefidagent@us.costar.local\", \"cg02dcus01@us.costar.local\", \"jumpprd\", \"cvmaprd\"]);\r\nCheckpoint_Base\r\n| where isnotempty(SourceHostName)\r\n| where not(SourceHostName has_any (exclude))\r\n| where SourceHostName !startswith \"cs\"\r\n// | where SourceHostName !contains \"prtgprd\" //keeping these active for now\r\n// | where SourceHostName !contains \"vscanprd\"\r\n// | where SourceHostName !contains \"ctrlprd\"\r\n| where DstPortNumber == 445\r\n| extend HourOfDay = format_datetime(TimeGenerated, \"MM/dd/yyyy HH\")\r\n| summarize count() by HourOfDay, SourceHostName, SrcUserName, SrcIpAddr, DstIpAddr //\r\n| where count_ > 8000 //change for # of connections to evaluate\r\n| extend User = extract(\"^(.*?)\\\\s*\\\\(\", 1, SrcUserName)\r\n| join identity on User\r\n| where isnotempty(User)\r\n| summarize\r\n    by\r\n    HourOfDay,\r\n    Connections_Over_445 = count_,\r\n    SourceHostName,\r\n    SrcIpAddr,\r\n    DstIpAddr,\r\n    User,\r\n    Department,\r\n    JobTitle\r\n| sort by Connections_Over_445 desc",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1048"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "User"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "SourceHostName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "DstIpAddr"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

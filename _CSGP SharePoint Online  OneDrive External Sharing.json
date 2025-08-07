@@ -1,0 +1,97 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/471f307f-3ae1-4b64-86c8-24047377c841')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/471f307f-3ae1-4b64-86c8-24047377c841')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: SharePoint Online / OneDrive External Sharing",
+                "description": "This rule will detect instances where CoStar employees are sharing content with external users and generate an incident.  Incidents should be audited.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "OfficeActivity\r\n| where Operation contains \"SharingInvitation\" or Operation contains \"SecureLinkCreated\" or Operation contains \"AddedSecureLink\" or Operation contains \"AnonymousLink\"\r\n| where TargetUserOrGroupType != \"\"\r\n//| where TargetUserOrGroupType == \"Guest\" or TargetUserOrGroupType == \"NotAvailable\"\r\n| project TimeGenerated, UserId,TargetUserOrGroupName, OfficeObjectId, Operation, Event_Data, OfficeWorkload, ClientIP, ItemType, Site_Url, UserAgent \r\n| extend AccountCustomEntity = UserId\r\n| extend HostCustomEntity = TargetUserOrGroupName\r\n| extend IPCustomEntity = ClientIP\r\n| extend URLCustomEntity = OfficeObjectId",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1567"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "HostCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "URLCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

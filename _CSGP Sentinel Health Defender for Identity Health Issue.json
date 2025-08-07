@@ -1,0 +1,68 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/3e2612ae-b451-4e67-ba9d-6d8d4c17f8a5')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/3e2612ae-b451-4e67-ba9d-6d8d4c17f8a5')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Sentinel Health: Defender for Identity Health Issue",
+                "description": "Alerts on sensor health issues. \n\nHandling guidance: Notify Enterprise Defense team to investigate with IAM; track to resolution",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "let exclusions_ = dynamic([\r\n'Microsoft 365 Defender has detected a security threat'\r\n,'Workspace: Daily \"Summary\"'\r\n,'User and IP address reconnaissance (SMB)'\r\n,'Security principal reconnaissance (LDAP)'\r\n,'Suspected identity theft (pass-the-ticket)'\r\n,'Remote code execution attempt'\r\n]);\r\nEmailEvents\r\n| where SenderFromAddress == \"defender-noreply@microsoft.com\"\r\n| extend MDIWorkspace = extract(@\"(^.*) Workspace\", 1, Subject)\r\n| extend Severity = extract(@\" \\[(.*)\\] \", 1, Subject)\r\n| extend AlertTitle =  extract(@\"\\] (.*)$\", 1, Subject)\r\n| summarize by bin(TimeGenerated, 10m), MDIWorkspace, Severity, AlertTitle, Subject\r\n| extend ProductName = \"Microsoft Defender for Identity\"\r\n| extend AlertLink = \"https://security.microsoft.com/settings/identities?tabid=healthIssues\"\r\n//Exclusions\r\n| where not(Subject has_any (exclusions_))",
+                "queryFrequency": "P7D",
+                "queryPeriod": "P7D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1565"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "P1D",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": [
+                            "AlertTitle"
+                        ]
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Defender for Identity Health: {{AlertTitle}}",
+                    "alertDescriptionFormat": "Defender for Identity Health Portal:\nhttps://security.microsoft.com/settings/identities?tabid=healthIssues \n\n",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "AlertTitle": "AlertTitle"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

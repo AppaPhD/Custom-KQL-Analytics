@@ -1,0 +1,113 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9842ee06-d984-41e7-84b8-a7ae55021e8b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9842ee06-d984-41e7-84b8-a7ae55021e8b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Movement of Sensitive File Types",
+                "description": "Description: This detection identifies the movement of sensitive database file types (e.g., `.mdf`, `.ndf`, `.ldb`, `.sqlite`, `.db`, `SQLITE`) combined with potential exfiltration commands such as `scp`, `rsync`, `ftp`, or `curl`. It monitors process activity, file operations, and network events for anomalous access, transfer, or upload of these files to untrusted or external locations, indicating potential data exfiltration attempts.\n\nHandling Guidance:  When this detection triggers, start by investigating the source of the file transfer to determine where the sensitive file originated. Reach out to the database or server owner to verify whether the activity is legitimate or authorized. If there are signs of compromise, such as suspicious commands or processes running on the device, take immediate action to isolate the device and prevent further potential impact on the environment.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Analytic Rule Name: _DEV: Movement of Sensitive File Types\r\n// Contributor: Kamran Ahmadjan\r\n// Reviewer:\r\n// Reference:\r\n//\r\n// Description: This detection identifies the movement of sensitive database file types (e.g., `.mdf`, `.ndf`, `.ldb`, `.sqlite`, `.db`, `SQLITE`) combined with potential exfiltration commands such as `scp`, `rsync`, `ftp`, or `curl`. It monitors process activity, file operations, and network events for anomalous access, transfer, or upload of these files to untrusted or external locations, indicating potential data exfiltration attempts.\r\n// Handling Guidance:  When this detection triggers, start by investigating the source of the file transfer to determine where the sensitive file originated. Reach out to the database or server owner to verify whether the activity is legitimate or authorized. If there are signs of compromise, such as suspicious commands or processes running on the device, take immediate action to isolate the device and prevent further potential impact on the environment.\r\n// Change notes\r\nlet SensitiveDatabaseExtensions = dynamic([\".mdf\", \".ndf\", \".ldb\", \".sqlite\", \".db\", \"SQLITE\"]);\r\nlet ExfiltrationCommands = dynamic([\"scp\", \"rsync\", \"curl\", \"wget\", \"ftp\", \"tftp\", \"sftp\"]);\r\nDeviceFileEvents\r\n| where isnotempty(FileName) and FileName has_any(SensitiveDatabaseExtensions)\r\n| extend SensitiveExtension = extract(@\"\\.(mdf|ndf|ldb|sqlite|SQLITE|db)$\", 1, FileName)\r\n| where isnotempty(SensitiveExtension)\r\n| project File_TimeGenerated = TimeGenerated, DeviceName, PreviousFileName, SensitiveFile = FileName, FolderPath, ActionType, SensitiveExtension, InitiatingProcessAccountName, SensitiveFileSHA256 = SHA256\r\n| join kind=inner (\r\n    DeviceProcessEvents\r\n    | where ProcessCommandLine has_any(ExfiltrationCommands) and FileName has_any(ExfiltrationCommands)\r\n    | project DeviceName, Process_TimeGenerated = TimeGenerated, ProcessCommandLine, ExfiltrationTool = extract(@\"\\b(scp|rsync|curl|wget|ftp|tftp|sftp)\\b\", 1, ProcessCommandLine), FileUsedForExfiltration= FileName\r\n) on DeviceName\r\n| where ProcessCommandLine has(SensitiveFile) \r\n   or (isnotempty(PreviousFileName) and ProcessCommandLine has(PreviousFileName)) \r\n   or (isnotempty(SensitiveFileSHA256) and ProcessCommandLine has(SensitiveFileSHA256))\r\n| project DeviceName,  \r\n          File_TimeGenerated, SensitiveFile, FileUsedForExfiltration, FolderPath, ActionType, SensitiveExtension, InitiatingProcessAccountName, \r\n          Process_TimeGenerated, ProcessCommandLine, ExfiltrationTool",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CommandAndControl",
+                    "Exfiltration",
+                    "Collection",
+                    "LateralMovement"
+                ],
+                "techniques": [
+                    "T1048",
+                    "T1567",
+                    "T1560",
+                    "T1021",
+                    "T1056"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "SensitiveFile"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FolderPath"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ProcessId",
+                                "columnName": "ExfiltrationTool"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

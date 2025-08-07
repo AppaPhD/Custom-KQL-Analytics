@@ -1,0 +1,83 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f434fb32-8677-4ecd-9d9f-5d757085a8b3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f434fb32-8677-4ecd-9d9f-5d757085a8b3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Sentinel Health: Domain Controller No Heartbeat ",
+                "description": "Analytic rule to detect when a domain controller stops reporting a heartbeat from AMA.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Analytic Rule Name: _dev: Sentinel Health: Domain Controller Heartbeat \r\n// Contributor: Lucas Trainer, Gunther Abbot\r\n// Reviewer: \r\n// Reference:\r\n//\r\n// Description: This analytic rule looks for events where a domain controller no longer has a heartbeat from MMA\r\n// Handling guidance: Determine if the domain controller is still active. The log analytics agent may need to be reinstalled, or there may be a problem with the DC. \r\n//\r\n// Date     | Author             | Change notes\r\n// ---------------------------------------------------\r\n// 12/28/22 | ltrainer           | Initial version\r\n// 04/04/23 | gabbot             | Removed ComputerIP to fix misfire when IP address changes\r\n//\r\n// Query:\r\nHeartbeat\r\n| where TimeGenerated >= ago(3d)\r\n| where Computer matches regex \"^[[:alpha:]]{2}[[:digit:]]{2}(dc)|(DC)\"\r\n| summarize arg_max(TimeGenerated, *) by Computer\r\n| extend last_log_hr = datetime_diff(\"hour\", now(), TimeGenerated)\r\n| extend Suppress = case(\r\n    Computer == \"cg07dcus01.us.costar.local\", true, //Server decommed. OPCN-23113\r\n    last_log_hr <= 1, true,\r\n    false)\r\n| where not(Suppress)\r\n| project Computer, ComputerIP, Suppress, last_log_hr",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P3D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1489"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT12H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Sentinel Health: {{Computer}}: {{last_log_hr}} hours since last heartbeat",
+                    "alertDescriptionFormat": "Description: This analytic rule looks for events where a domain controller no longer has a heartbeat from MMA. <br>\n<br>\nHandling guidance: Determine if the domain controller is still active. The log analytics agent may need to be reinstalled, or there may be a problem with the DC. \n",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "Computer"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ComputerIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

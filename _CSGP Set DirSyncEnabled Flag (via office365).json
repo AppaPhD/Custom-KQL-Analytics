@@ -1,0 +1,79 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/70064bc1-f359-446d-856c-6857e8f2565a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/70064bc1-f359-446d-856c-6857e8f2565a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Set DirSyncEnabled Flag (via office365)",
+                "description": "DirSyncEnabled attribute maintains directory synchronization.  It can be an IoC if this is modified to remove the sync from on-prem AD.  Value of DirSyncEnabled attribute defines if its a cloud only account or synced account. Technique: T1020",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Obadiah \r\n// Source:  \r\n// Reviewer: \r\n//\r\n// Description: DirSyncEnabled attribute maintains directory synchronization.  It can be an IoC if this is modified to remove the sync from on-prem AD.  Value of DirSyncEnabled attribute defines if its a cloud only account or synced account. Technique: T1020\r\n// Handling Guidance: \r\n//\r\n// Change notes\r\n// ------------\r\n// 05/01/23 Obadiah Bridges - updated boilerplate\r\n//\r\n// Query: \r\nOfficeActivity\r\n| where ((ResultStatus == \"Success\") and (ModifiedProperties contains \"DirSyncEnabled\"))\r\n| extend AccountCustomEntity = UserId\r\n| extend IPCustomEntity = ClientIP",
+                "queryFrequency": "PT12H",
+                "queryPeriod": "PT12H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1020"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

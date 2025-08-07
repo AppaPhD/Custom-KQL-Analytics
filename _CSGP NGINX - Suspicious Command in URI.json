@@ -1,0 +1,82 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f573bd84-fc7e-461f-ba42-04ff63526f2f')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f573bd84-fc7e-461f-ba42-04ff63526f2f')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: NGINX - Suspicious Command in URI",
+                "description": "Detects command in URI",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Author: Henry Cox and Sam Rothschild\n//Source: Built-in from Microsoft\n//Reviewer: Lucas Trainer\n//Description: Alerting for commands being passed in via URI, both in plaintext and hex.\n//Handling guidance:\nNGINXHTTPServer\n//Add exception here using a watchlist to reference IPs associacted with R7 Scanners\n| where not(SrcIpAddr has_any ((_GetWatchlist('exception_VulnerabilityScanners')\n    | project SearchKey))) //Exclude vulnerability scanners\n| where UrlOriginal contains 'cat%20/etc/passwd'\n    or UrlOriginal contains '/etc/passwd'\n    or UrlOriginal contains 'ping -i'\n    or UrlOriginal contains '/usr/bin/id('\n    or UrlOriginal contains '%2f%75%73%72%2f%62%69%6e%2f%69%64'\n    or UrlOriginal contains 'phpinfo()'\n    or UrlOriginal contains '%70%68%70%69%6e%66%6f%28%29'\n    or UrlOriginal contains ';id'\n    or UrlOriginal contains '%3b%69%64'\n    or UrlOriginal contains '/bin/bash -c'\n    or UrlOriginal contains '%2f%62%69%6e%2f%62%61%73%68%20%2d%63%27'\n    or UrlOriginal contains '/bin/bash'\n    or UrlOriginal contains '%2f%62%69%6e%2f%62%61%73%68'\n    or UrlOriginal contains 'sleep('\n    or UrlOriginal contains '%73%6c%65%65%70%28'\n    or UrlOriginal contains 'curl'\n    or UrlOriginal contains '%63%75%72%6c'\n    or UrlOriginal contains '&dir'\n    or UrlOriginal contains '%26%64%69%72'\n    or UrlOriginal contains '& dir'\n    or UrlOriginal =~ '%26%20%64%69%72'\n    or UrlOriginal contains '<script>'\n    or UrlOriginal contains '%3c%73%63%72%69%70%74%3e'\n    or UrlOriginal contains 'eval('\n    or UrlOriginal contains '%65%76%61%6c%28'\n    or UrlOriginal contains 'exec('\n    or UrlOriginal contains '%65%78%65%63%28'\n    or UrlOriginal contains 'whoami'\n    or UrlOriginal contains '%77%68%6f%61%6d%69'\n    or UrlOriginal contains 'wget'\n    or UrlOriginal contains 'python'\n    or UrlOriginal contains 'gcc'\n    or UrlOriginal contains 'uname'\n    or UrlOriginal contains 'systeminfo'\n    or UrlOriginal contains '%77%67%65%74'\n    or UrlOriginal contains '%70%79%74%68%6f%6e'\n    or UrlOriginal contains '%75%6e%61%6d%65'\n    or UrlOriginal =~ '%73%79%73%74%65%6d%69%6e%66%6f' \n| project\n    TimeGenerated,\n    SrcIpAddr,\n    UrlOriginal,\n    HttpRequestMethod,\n    HttpStatusCode,\n    HttpUserAgentOriginal\n| extend Description_ = strcat (\n    \"Description:\"\n    \"\\n\", \"Source IP: \", SrcIpAddr,\n    \"\\n\", \"User agent: \", HttpUserAgentOriginal,\n    \"\\n\", \"URI Containing: \", UrlOriginal, \n    \"\\n\", \"HTTP Request Method: \", HttpRequestMethod, \n    \"\\n\", \"HTTPStatusCode: \", HttpStatusCode\n    )\n| extend HandlingGuidance_ = strcat (\n    \"Handling Guidance:\"\n    \"\\n\", \"Determine whether the command from the source IP address is part of a known-authorized testing activity or unauthorized recon activity. Engage the network security & vulnerability management team for assistance.\"\n    )",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "IP"
+                        ],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "NginX - Suspicious Command Passed in URI",
+                    "alertDescriptionFormat": "{{Description_}}\n\n{{HandlingGuidance_}}"
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "UrlOriginal"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SrcIpAddr"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

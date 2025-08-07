@@ -1,0 +1,95 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1ddc443d-a03b-4022-b4a0-b08a17af49c3')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1ddc443d-a03b-4022-b4a0-b08a17af49c3')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: Palo Alto - Network Port Scan Detected",
+        "description": "This alert detects when a port scan has been conducted (excludes Rapid7 scanning).\n\nSOURCE IP investigation:\n##############################\nIs it external or internal?\n\nExternal:\n  Visit https://security.microsoft.com/intel-explorer and enter the IP. Is the IP marked as malicious?\n  Is there evidence of any other IPs scanning the same destination?\n  Was there any other malicious activity from the same IP against CSG's network?\nResponse: If you determine that the IP is external, malicious, and consistently targeting our network, follow https://costar-group-prod-dev.atlassian.net/wiki/x/-SdkD\n\nInternal:\n  What system has the IP address? \n  Why was the scan executed? What started the process?\n  \n\nDESTINATION IP investigation\n##############################\n  Identify why the alert triggering. Were there any recent system/network changes?\n  Should the system be accessible by the source IP?\n\nResponse: If it is determined that the local IP belongs to an endpoint, and the activity cannot be associated to any legitimate actions, follow the isolation procedure: https://costar-group-prod-dev.atlassian.net/wiki/x/X81jD",
+        "severity": "Low",
+        "enabled": true,
+        "query": "// Contributor: Anthony Edelstein\n// Reviewer: Lucas Trainer\n// Description: Detects port scanning activity while excluding known Rapid7 scanners.\n\n// Change Log:\n// - 02/08/23 Lucas Trainer\n// - 08/28/23 Adrian Shina: Added cg02vscanprd003 to exclusions, updated guidance.\n// - 10/03/23 Anthony Edelstein: Added 172.19.18.169 (InsightVM) to exclusions.\n// - 10/04/23 Obadiah Bridges: Added cg01vscanprd005 (172.18.162.129) to exclusions.\n// - 12/13/23 Gen: Added cg01vscanprd004, fixed commas in exclusions.\n// - 03/19/24 Sam: Added IP trace to device name.\n// - 05/05/24: Changed exclusion logic to use DeviceName instead of SrcIpAddress.\n\nlet exclusions_ = dynamic([\n    \"cg01vscanprd005\", \"cg02vscanprd001\", \"cg01vscanprd002\", \"cg04scanprd001\",\n    \"cg03vscanprd001\", \"cg04vscanprd002\", \"cg02vscanprd003\", \"cg02vscanprd002\",\n    \"CG13MONIOPS002\", \"cg01vscanprd004\", \"cg13moniops001\", \"cg01vscanprd006\",\n    \"cg13vscanprd001\", \"cg04vscanprd003\", \"cg04vscanprd004\"\n]);\n\nlet ip_trace = DeviceNetworkInfo\n    | extend IPAddress = tostring(IPAddresses[0].IPAddress)\n    | where isnotempty(IPAddress)\n    | summarize by DeviceName, IPAddress;\n\nPaloAltoFW_Base\n| where EventSubType has \"SCAN:\"\n| where DstPortNumber != 443\n| summarize\n    CountHostsScanned = dcount(DstIpAddr),\n    CountPortsScanned = dcount(DstPortNumber),\n    PortsScanned = make_set(DstPortNumber),\n    HostsScanned = make_set(DstIpAddr, 5000)\n    by SrcIpAddr, EventSubType, Activity\n| where CountPortsScanned >= 5\n| join kind=leftouter (ip_trace) on $left.SrcIpAddr == $right.IPAddress\n| where not(DeviceName has_any (exclusions_))\n| order by CountPortsScanned desc",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "Reconnaissance"
+        ],
+        "techniques": [
+          "T1595",
+          "T1592",
+          "T1590",
+          "T1597"
+        ],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Possible {{Activity}}  Detected from Port Scanning",
+          "alertDescriptionFormat": "{{SrcIpAddr}}   scanned {{CountHostsScanned}} hosts on {{CountPortsScanned}}   ports.\nHandling Guidance: Take the SrcIpAddr and enter it in the search bar on MDTI: https://ti.defender.microsoft.com/ to gather any available information about the attacker.\nAdditionally, if the IP address is determined to be from a legitimate attacker add it to the list of IPs in M365 IOC to block the IP.\nInvestigate any login attempts on Target IP.\nIf scan originates from an internal IP determine who the user was and reach out to them to ask why they were conducting a port scan.",
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "HostsScanned"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "DeviceName"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

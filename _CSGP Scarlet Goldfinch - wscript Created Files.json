@@ -1,0 +1,95 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/dcdcdd20-8528-4733-b640-722e9173c458')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/dcdcdd20-8528-4733-b640-722e9173c458')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Scarlet Goldfinch - wscript Created Files",
+                "description": "Scarlet Goldfinch is an activity cluster that uses a distribution scheme similar to SocGholish and uses files to drop NetSupport Manager onto user device.\n\nHandling Guidance: 1) Isolate the device. 2) Stop/Quarantine the file. 3) Run an AV scan on the device. 4) Use the compromised account workbook to check for suspicious logins, process events and network events. 4) If the user identity is at risk, revoke user's sessions and MFA. Also, reset user's password.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Wajahat Malik and James Kim\r\n// Reviewer: James Kim\r\n// Reference: https://cotratp.my.redcanary.co/intelligence_profiles/709, https://cotratp.my.redcanary.co/threats/1613\r\n//\r\n// Description: Scarlet Goldfinch is an activity cluster that uses a distribution scheme similar to SocGholish and uses files to drop NetSupport Manager onto user device. T1584, T1059, T1204\r\n//\r\n// Handling Guidance: 1) Isolate the device. 2) Stop/Quarantine the file. 3) Run an AV scan on the device. 4) Use the compromised account workbook to check for suspicious logins, process events and network events. 4) If the user identity is at risk, revoke user's sessions and MFA. Also, reset user's password.\r\n// Change notes\r\n// ------------\r\n// 08/01/24 Wajahat Malik and James Kim - Initial version\r\n\r\nlet fileCreation = DeviceFileEvents\r\n| project ActionType, DeviceName, FileName, FolderPath, InitiatingProcessAccountUpn;\r\nDeviceProcessEvents\r\n| where FileName has \"wscript\"\r\n| where ProcessCommandLine has \"wscript.exe\" and ProcessCommandLine has @\"AppData\\Local\\Temp\" and ProcessCommandLine has \"update\"\r\n| extend FileInvolved = extract(@'WScript\\.exe\"\\s\"([^\"]+)\"', 1, ProcessCommandLine)\r\n| join kind=inner fileCreation on $left.FileInvolved == $right.FolderPath and $left.DeviceName == $right.DeviceName\r\n| project TimeGenerated, DeviceName, InitiatingProcessAccountName, ProcessCommandLine, InitiatingProcessFileName, Action = ActionType1, FileCreated = FileName1, Location = FolderPath1",
+                "queryFrequency": "PT30M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "ResourceDevelopment",
+                    "Execution"
+                ],
+                "techniques": [
+                    "T1584",
+                    "T1204",
+                    "T1059"
+                ],
+                "subTechniques": [
+                    "T1204.002"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Malware",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileCreated"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

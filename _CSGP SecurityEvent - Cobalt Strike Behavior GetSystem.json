@@ -1,0 +1,99 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/419ca6a5-59f7-4f20-896f-ff86c901460e')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/419ca6a5-59f7-4f20-896f-ff86c901460e')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: SecurityEvent - Cobalt Strike Behavior GetSystem",
+                "description": "Looking for CoblatStrike or Empire GetSystem commands.",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Diana Chong\r\n//Source: https://redcanary.com/blog/getsystem-offsec/\r\n//Reviewer: Grover Mewborn\r\n//Description: Looking for CoblatStrike or Empire GetSystem commands.\r\n//Handling guidance:\r\nSecurityEvent\r\n| where EventID == '7045'\r\n| where ServiceFileName contains \"cmd.exe\" or ServiceFileName contains \"%COMSPEC%\"\r\n| where ServiceFileName contains \"echo\" and ServiceFileName contains \"\\\\pipe\\\\\"",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Collection",
+                    "CommandAndControl",
+                    "CredentialAccess",
+                    "DefenseEvasion",
+                    "Discovery",
+                    "Execution",
+                    "Exfiltration",
+                    "LateralMovement",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1056",
+                    "T1132",
+                    "T1001",
+                    "T1573",
+                    "T1548",
+                    "T1134",
+                    "T1197",
+                    "T1140",
+                    "T1564",
+                    "T1562",
+                    "T1070",
+                    "T1055",
+                    "T1550",
+                    "T1078",
+                    "T1087",
+                    "T1083",
+                    "T1046",
+                    "T1135",
+                    "T1069",
+                    "T1057",
+                    "T1012",
+                    "T1018",
+                    "T1518",
+                    "T1016",
+                    "T1049",
+                    "T1007",
+                    "T1059",
+                    "T1203",
+                    "T1106",
+                    "T1047",
+                    "T1030",
+                    "T1543"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

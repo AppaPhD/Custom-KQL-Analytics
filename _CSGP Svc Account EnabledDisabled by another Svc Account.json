@@ -1,0 +1,101 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/30cd2126-376a-45d7-94d5-47a175a8a333')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/30cd2126-376a-45d7-94d5-47a175a8a333')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Svc Account Enabled/Disabled by another Svc Account",
+                "description": "This rule detects svc account enable/disable events being performed by another svc account. This may suggest a compromised service account gaining persistence on old disabled service accounts.\n\nHandling Guidance: Validate the activity with the owner of the service account and if confirmed as malicious, mark the account as compromised.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: jkim2\r\n// Reviewer: \r\n// Reference: \r\n//\r\n// Description: This rule detects svc account enable/disable events being performed by another svc account. This may suggest a compromised service account gaining persistence on old disabled service accounts.\r\n// Handling Guidance: Validate the activity with the owner of the service account and if confirmed as malicious, mark the account as compromised.\r\n//\r\nlet Changes = IdentityDirectoryEvents\r\n| where not(ActionType in(\"Account enabled\", \"Account disabled\"))\r\n| extend AdditionalFields = parse_json(AdditionalFields)\r\n| extend FromGroup = AdditionalFields.[\"FROM.GROUP\"]\r\n| extend ToGroup = AdditionalFields.[\"TO.GROUP\"]\r\n| extend TargetObject = coalesce (\r\n    AdditionalFields.[\"TARGET_OBJECT.USER\"],\r\n    AdditionalFields.[\"TARGET_OBJECT.DEVICE\"],\r\n    AdditionalFields.[\"TARGET_OBJECT.GROUP\"]\r\n)\r\n| extend Hour = hourofday(TimeGenerated)\r\n| project TimeGenerated, ActionType, AccountChanged = TargetAccountDisplayName, InitiatedBy = AccountName, FromGroup, ToGroup, DestinationDeviceName, Hour\r\n| summarize Events = make_list(pack(\"TimeGenerated\", TimeGenerated, \"ActionType\", ActionType, \"AccountChanged\", AccountChanged, \"InitiatedBy\", InitiatedBy, \"FromGroup\", FromGroup, \"ToGroup\", ToGroup, \"DestinationDeviceName\", DestinationDeviceName)) by Hour, AccountChanged;\r\nIdentityDirectoryEvents\r\n| where ActionType in(\"Account enabled\", \"Account disabled\")\r\n| where AccountName !has \"svcAD_ManageUser\" //this is the typical svc account for managing other svc accounts\r\n| where TargetAccountDisplayName startswith \"svc\"\r\n| where AccountName startswith \"svc\"\r\n// | where TargetAccountDisplayName == \"svcVRealizeAuto\" //activity from red team test 4/11\r\n| extend Hour = hourofday(TimeGenerated)\r\n| project TimeGenerated, ActionType, Application, AccountChanged = TargetAccountDisplayName, InitiatedBy = AccountName, Hour\r\n| join Changes on AccountChanged, Hour\r\n| project TimeGenerated, ActionType, Application, AccountChanged, InitiatedBy, Events",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1098"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{AccountChanged}} {{ActionType}} by {{InitiatedBy}} ",
+                    "alertDescriptionFormat": "The svc account, {{AccountChanged}} was set to status: {{ActionType}} by {{InitiatedBy}} ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountChanged"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "SecurityGroup",
+                        "fieldMappings": [
+                            {
+                                "identifier": "DistinguishedName",
+                                "columnName": "InitiatedBy"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "AzureResource",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ResourceId",
+                                "columnName": "Application"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ActionType"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

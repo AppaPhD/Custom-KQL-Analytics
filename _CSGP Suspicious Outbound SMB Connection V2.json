@@ -1,0 +1,97 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/933e3326-b07e-477a-84bf-11c7d27590e6')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/933e3326-b07e-477a-84bf-11c7d27590e6')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Suspicious Outbound SMB Connection V2",
+                "description": "This analytic rule identifies network events where an external connection is made on port 445, potentially indicating suspicious SMB traffic. It filters out activity from known processes, users, devices, IPs, and URLs that are considered benign. This helps highlight unauthorized or anomalous network activity for further investigation.\n\n\nSMB can be used for exfiltration, reconnaissance, or lateral movement. Anomalous SMB connections should be closely examined.\n\nHandling guidance: \n\nIdentify the initiating process and review its origin.\nCross-reference remote IPs and URLs with threat intelligence databases.\n\nContainment:\nIsolate the device if the connection appears suspicious.\nBlock remote IPs or URLs at the network perimeter if confirmed malicious.\n\nRoot Cause Analysis:\nExamine logs to determine how the process or device initiated the connection.\nInvestigate any associated accounts for unauthorized activity.\n\nRemediation:\nUpdate exclusion lists or detection logic if benign activity caused the alert.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Analytic Rule Name: Suspicious SMB Connection V2\n//\n// Contributor: Anthony Edelstein, Lucas Trainer\n// Source: NA\n// Reviewer: Lucas Trainer\n//\n// Description: This analytic rule detects outbound SMB traffic from endpoint devices that deviates normal / expected traffic.\n//\n// Handling guidance: Review the logs for any suspicious connections (SMB connections to public IPs or from public IPs). \n// If there are any public connections, check the Local and Remote IP traffic in Sentinel for any suspicious process executing C2 connections.\n// Evaluate the source process, command line, user, and destination to identify what is happening and \n// determine whether the activity is benign or malicious.\n//\n// Reference: NA\n//\n// Change Log\n//12/24/2024 - Anthony Edelstein - Created V2 and disabled the original query. Added exclusions for Devices, removed IdentityInfo Table and join as it was not providing added insight.\n// 12/03/2024 - Wajahat Malik - Added RedisInsight.exe as an exclusion for Intiating Process CommandLine as this Software has been approved to use by GRC now\n// Query:\nlet excludedPaths = dynamic([\n    @\"c:\\windows\\system32\\ntoskrnl.exe\",\n    @\"c:\\program files (x86)\\zscaler\\zsatunnel\\zsatunnel.exe\",\n    @\"microsoft.tri.sensor.exe\",\n    @\"c:\\program files\\oracle\\virtualbox\\virtualboxvm.exe\",\n    @\"c:\\program files\\oracle\\virtualbox\\vboxheadless.exe\",\n    @\"c:\\program files\\avast software\\avast\\avastsvc.exe\",\n    @\"c:\\program files\\zscaler\\zsatunnel\\zsatunnel.exe\",\n    @\"appdata\\local\\programs\\redis insight\\\"\n    ]);\n//\nlet excludedCommands = dynamic([\n    \"Windows Defender Advanced Threat Protection\",\n    \"DBAGeneral\\\\TestNeededPortsToNewServer_AllServers.ps1\"//,\n    //\"NSESERV.EXE\"//,\n    ]);\n//\nlet excludedDevices = dynamic([\n    \"cg01axccprd001\", //AppViewX Certificate Management\n    \"cg04axccprd001\", //AppViewX Certificate Management\n    \"ushenpvscan01\", //Rapid7 scanner\n    \"cg04vscanprd003\", //Rapid7 scanner\n    \"ushendrptapp\",\n    \"atlnwmon01\",//BigFix Relay\n    \"cs01pprxprd002\"//CCMS CoStar Content Management System - Delivery of content for Analytics\n    ]);\nlet excludedURLs = dynamic([\"ushenpfs01\", \"ushenpfs02\", \"ushenpfs03\"]);\nlet excludedIPs = dynamic([\"172.19.19.44\", \"172.16.127.23\", \"127.0.0.1\"]);\nlet excludedUsers = dynamic([\"a_rbaraty\", \"a_palee\", \"a_bconrad\", \"a_afousekas\", \"gposton\"]);\nlet lookbackPeriod = 45d;\nDeviceNetworkEvents\n| where TimeGenerated >= ago(lookbackPeriod)\n| where ActionType has \"ConnectionSuccess\"\n| where RemotePort == 445\n| where InitiatingProcessFileName !has \"System\"\n| where InitiatingProcessId != 4\n| where not(DeviceName has_any(excludedDevices))\n| where not(InitiatingProcessFolderPath has_any(excludedPaths))\n| where not(InitiatingProcessCommandLine has_any(excludedCommands))\n| where not(RemoteUrl has_any(excludedURLs))\n| where not(RemoteIP has_any(excludedIPs))\n| where not(InitiatingProcessAccountName has_any(excludedUsers))\n// Join Cert Details\n| join kind=leftouter (DeviceFileCertificateInfo | where TimeGenerated >= ago(lookbackPeriod)) on $left.InitiatingProcessSHA1 == $right.SHA1\n// Join DeviceProcessEvents\n| join kind=leftouter (DeviceProcessEvents\n    | where TimeGenerated >= ago(lookbackPeriod))\n    on DeviceId, $left.InitiatingProcessSHA1 == $right.SHA1 | where InitiatingProcessId == ProcessId\n| summarize\n    make_set(RemoteUrl, 10),\n    make_set(RemoteIP, 10),\n    dcount(RemoteIP),\n    ConnectionCount=count()\n    by\n    bin(TimeGenerated, 1h),\n    DeviceName,\n    InitiatingProcessAccountName,\n    InitiatingProcessFileName,\n    InitiatingProcessCommandLine,\n    InitiatingProcessParentFileName,\n    InitiatingProcessVersionInfoProductName,\n    InitiatingProcessVersionInfoFileDescription,\n    InitiatingProcessVersionInfoOriginalFileName,\n    InitiatingProcessVersionInfoInternalFileName,\n    InitiatingProcessVersionInfoCompanyName\n| project-reorder\n    TimeGenerated,\n    DeviceName,\n    dcount_RemoteIP,\n    ConnectionCount,\n    InitiatingProcessAccountName,\n    InitiatingProcessFileName,\n    InitiatingProcessCommandLine,\n    InitiatingProcessVersionInfoInternalFileName,\n    InitiatingProcessVersionInfoOriginalFileName,\n    set_RemoteUrl,\n    set_RemoteIP \n| order by TimeGenerated asc\n\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1135",
+                    "T1018"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": true,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Endpoint: Suspicious Outbound SMB Network Connection",
+                    "alertDescriptionFormat": "This analytic rule detects outbound SMB traffic from endpoint devices that deviates normal / expected traffic.\n\nDescription:\n\n{{DeviceName}}  using {{InitiatingProcessCommandLine}}  connected to  {{set_RemoteUrl}} \n\nHandling Guidance:\n\nIdentify the initiating process and review its origin.\nCross-reference remote IPs and URLs with threat intelligence databases.\n\nContainment:\nIsolate the device if the connection appears suspicious.\nBlock remote IPs or URLs at the network perimeter if confirmed malicious.\n\nRoot Cause Analysis:\nExamine logs to determine how the process or device initiated the connection.\nInvestigate any associated accounts for unauthorized activity.\n\nRemediation:\nUpdate exclusion lists or detection logic if benign activity caused the alert.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "InitiatingProcessCommandLine"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

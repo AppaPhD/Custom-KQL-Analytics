@@ -1,0 +1,98 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9c632b18-8ed5-41d1-b5e2-a36ad2b54ba1')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9c632b18-8ed5-41d1-b5e2-a36ad2b54ba1')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Persistence: Suspicious program used to modify .lnk file in startup folder",
+                "description": "this detection looks for when a .lnk file is created with suspicious programs, why would people use sus_programs instead of the actual UI?\"\n\nHandling Guidance: \n1. Validate that the file is malicious, look for prevalence in org\n2. Lookup the file and reviews and see if people think its sus\n3. if confirmed malicious, collect file and then isolate the device\n4. Look for where this file is present in other devices and Identify the source!",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributors: Samuel Liu\r\n// Reviewer:\r\n// \r\n// Handling Guidance: \r\n//      1. Validate that the file is malicious, look for prevalence in org\r\n//      2. Lookup the file and reviews and see if people think its sus\r\n//      3. if confirmed malicious, collect file and then isolate the device\r\n//      4. Look for where this file is present in other devices and Identify the source!\r\n//\r\n// Description: this detection looks for when a .lnk file is created with suspicious programs, why would people use sus_programs instead of the actual UI?\"\r\n//\r\nlet sus_programs = dynamic([\"powershell\",\"cmd\",\"cscript\",\"wscript\"]);\r\nlet prevalence_data = (\r\nDeviceFileEvents\r\n| where TimeGenerated > ago(60d)\r\n| where FileName endswith \".lnk\"\r\n| summarize Prevalence = count_distinct(DeviceName) by FileName);\r\nDeviceFileEvents\r\n| where FolderPath has \"\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\\"\r\n| where InitiatingProcessCommandLine has_any (sus_programs)\r\n| where FileName endswith \".lnk\"\r\n| where FileName !has \"TASKE\"\r\n| join kind=leftouter prevalence_data on FileName\r\n| project-reorder TimeGenerated, ActionType, DeviceName, FileName, InitiatingProcessCommandLine, Prevalence, FileSize, FolderPath, InitiatingProcessAccountName\r\n| where isempty(Prevalence) or Prevalence < 5 //looking for low prevalence, since that might be suspicious",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Persistence: A suspicious program was used to modify the startup folder",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessAccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "InitiatingProcessCommandLine"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

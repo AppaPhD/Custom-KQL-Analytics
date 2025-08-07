@@ -1,0 +1,78 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b4e407d3-6b76-48f7-a38c-e83780061ff1')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b4e407d3-6b76-48f7-a38c-e83780061ff1')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Sentinel Health: Log Forwarder",
+                "description": "",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Analytic Rule Name: Sentnel health: log forwarder\n//\n// Contributor: Lucas Trainer\n// Source: N/A\n// Reviewer:\n//\n// Description:\n// Handling guidance: \n//\n// Known false positives: \n//\n//1/6/2025 updated query to exclude 3 servers that were decommissioned - cg01siemops101, cgo04siemops101, cg13siemops101. aedelstein\n// 3/14/25 - ashina - excluding cg01siemops104 as it is being decommed\n// Query:\nHeartbeat\n| where TimeGenerated >= ago(14d)\n| where Computer contains \"siemops\"\n| where not (Computer has \"cg02siemops104\" or Computer has \"cg02siemops101\" or Computer has \"cg02siemops102\" or Computer has \"cg02siemops103\" or Computer has \"cg04siemops101\" or Computer has \"cg04siemops102\" or Computer has \"cg13siemops101\" or Computer has \"cg13siemops102\" or Computer has \"cg01siemops101\" or Computer has \"cg04siemops101\" or Computer has \"cg13siemops101\")\n| where not(Computer contains \"siemops0\")\n| where not(Computer has \"cg01siemops115\")\n| where not(Computer has \"cg01siemops104\")\n| summarize last_log = datetime_diff(\"second\", now(), max(TimeGenerated)) by Computer\n| extend last_log_hr = last_log / 3600\n| extend LastEntry = strcat(Computer, \": \", last_log_hr, \" hours since last log heartbeat\")\n| extend Suppress = case(\n                        last_log_hr <= 1,\n                        \"True\",\n                        \"False\"\n                    )\n| where Suppress != \"True\"\n| project LastEntry, Computer, Suppress, last_log, last_log_hr",
+                "queryFrequency": "PT4H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1565"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "P2D",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Sentinel Health: Log Forwarder",
+                    "alertDescriptionFormat": "The following log forwarders are not reporting a heartbeat. They may be offline or there may be a problem with the log forwarder agent. \n\n{{{LastEntry}} ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "Computer"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

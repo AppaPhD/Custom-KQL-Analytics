@@ -1,0 +1,88 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9b6e1f70-a2d8-4917-aa67-26d3252b233b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9b6e1f70-a2d8-4917-aa67-26d3252b233b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Suspicious Mail Forwarding Rule",
+                "description": "Identifies when a mail forwarding rule is created for a mailbox. After initial compromise, an attacker may create mailbox rules to forward messages, especially containing specific keywords. This analytic rule detects the creation of forwarding rules for organizations that have not disabled / controlled mail forwarding with mail transport rules. ",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Lucas Trainer\r\n// Reviewer: James Kim\r\n// Reference: Adapted from https://github.com/Azure/Azure-Sentinel/blob/399ee453444dd9e57f6d462c9cf0e94d1b869877/Detections/OfficeActivity/Office_MailForwarding.yaml\r\n//\r\n// Description: Identifies when a mail forwarding rule is created for a mailbox. After initial compromise, an attacker may create mailbox rules to forward messages, especially containing specific keywords. This analytic rule detects the creation of forwarding rules for organizations that have not disabled / controlled mail forwarding with mail transport rules.\r\n// Handling Guidance: Examine the source mailbox listed in UserID, the desination mailbox listed in DestinationMailAddress, and the forwarding rule criteria.\r\n// MITRE ATT&CK Reference: \r\n//\r\n// Automation, Enrichment, and Orchestrations: Eliminate false positives by adding exception domains to the list below. \r\n//\r\n// Known false positives: Organizations with CRMs / salesforce implementations where messages for a set of users are forwarded to the CRM. \r\n//\r\n// Change notes\r\n// ------------\r\n// 05/15/23 James Kim - Promoted to _CSGP\r\n//\r\n//let exceptedDomains_ = dynamic([\"@costar.com\", \"@ten-x.com\"]);\r\nOfficeActivity\r\n| where OfficeWorkload =~ \"Exchange\"\r\n//| where Operation in (\"Set-Mailbox\", \"New-InboxRule\", \"Set-InboxRule\")\r\n| where Parameters has_any (\"ForwardTo\", \"RedirectTo\", \"ForwardingSmtpAddress\")\r\n| mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))\r\n| evaluate bag_unpack(ParsedParameters, columnsConflict='replace_source')\r\n| extend DestinationMailAddress = tolower(\r\n                                      case(\r\n                                          isnotempty(column_ifexists(\"ForwardTo\", \"\")),\r\n                                          column_ifexists(\"ForwardTo\", \"\"),\r\n                                          isnotempty(column_ifexists(\"RedirectTo\", \"\")),\r\n                                          column_ifexists(\"RedirectTo\", \"\"),\r\n                                          isnotempty(column_ifexists(\"ForwardingSmtpAddress\", \"\")),\r\n                                          trim_start(@\"smtp:\", column_ifexists(\"ForwardingSmtpAddress\", \"\")),\r\n                                          \"\"\r\n                                      )\r\n                                  )\r\n| extend Mailbox_ = tolower(\r\n                        case(\r\n                            isnotempty(column_ifexists(\"Mailbox\", \"\")),\r\n                            column_ifexists(\"Mailbox\", \"\"),\r\n                            isnotempty(column_ifexists(\"OfficeObjectId\", \"\")),\r\n                            column_ifexists(\"OfficeObjectId\", \"\"),\r\n                            \"\"\r\n                        )\r\n                    )\r\n| where isnotempty(DestinationMailAddress)\r\n| mv-expand split(DestinationMailAddress, \";\")\r\n//| where not(DestinationMailAddress has_any (exceptedDomains_)) //Add exception for allowed recipient domains\r\n| extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\r\n| extend ClientIP = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1])\r\n| extend Description_ = strcat(\r\n                            \"A suspicious mail forwarding rule has been created: \",\r\n                            \"\\n\",\r\n                            \"\\n\",\r\n                            \"Mailbox: \",\r\n                            Mailbox_,\r\n                            \"\\n\",\r\n                            \"Forwarding Destination: \",\r\n                            DestinationMailAddress,\r\n                            \"\\n\",\r\n                            \"Rule Creator: \",\r\n                            UserId,\r\n                            \"\\n\",\r\n                            \"Operation: \",\r\n                            Operation,\r\n                            \"\\n\",\r\n                            \"Rule Name (if any): \",\r\n                            Name\r\n                        )\r\n| extend HandlingGuidance_ = strcat(\r\n                                 \"Handling Guidance:\",\r\n                                 \"Contact a user involved to determine if this mail forwarding rule is expected. If unexpected, examine Azure AD sign in locations, times, and IP addresses to determine whether the email account has been compromised. \"\r\n    \"\\n\",\r\n                                 \"\\n\",\r\n                                 \"Responding to a compromised email account:\"\r\n    \"\\n\",\r\n                                 \"Step 1 Reset the user's password\",\r\n                                 \"\\n\",\r\n                                 \"Step 2 Optional: Block the user account from signing-in\",\r\n                                 \"\\n\",\r\n                                 \"Step 3 Remove suspicious email forwarding addresses\",\r\n                                 \"\\n\",\r\n                                 \"Step 4 Disable any suspicious inbox rules\",\r\n                                 \"\\n\",\r\n                                 \"Step 5 Unblock the user from sending mail\",\r\n                                 \"\\n\",\r\n                                 \"Resource: https://docs.microsoft.com/en-us/microsoft-365/security/office-365-security/responding-to-a-compromised-email-account?view=o365-worldwide\"\r\n                             )\r\n| extend Suppress_ = case( \r\n                         DestinationMailAddress endswith \"@costar.com\",\r\n                         \"True\", //Supress costar destinations\r\n                         DestinationMailAddress endswith \"@ten-x.com\",\r\n                         \"True\", //Supress ten-x destinations\r\n                         DestinationMailAddress endswith \"@str.com\",\r\n                         \"True\", //Supress str destinations\r\n                         DestinationMailAddress endswith \"@costar.co.uk\",\r\n                         \"True\", //Supress costar destinations\r\n                         DestinationMailAddress endswith \"@realla.co\",\r\n                         \"True\", //Supress realla destinations\r\n                         DestinationMailAddress endswith \"@land.com\",\r\n                         \"True\", //Supress land destinations\r\n                         \"False\"\r\n                     ) \r\n| where Suppress_ != \"True\"\r\n| project-reorder\r\n    TimeGenerated,\r\n    Description_,\r\n    HandlingGuidance_,\r\n    Suppress_,\r\n    Mailbox_,\r\n    UserId,\r\n    OfficeObjectId,\r\n    DestinationMailAddress,\r\n    Operation,\r\n    OperationProperties,\r\n    Name,\r\n    OriginatingServer,\r\n    ClientIP",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1564",
+                    "T1562"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Mailbox"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Exchange Online: Suspicious Mail Forwarding Rule Created",
+                    "alertDescriptionFormat": "{{Description_}}\n\n{{{HandlingGuidance_}}",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Mailbox",
+                        "fieldMappings": [
+                            {
+                                "identifier": "MailboxPrimaryAddress",
+                                "columnName": "Mailbox_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserId"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,105 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9d0812e7-d90e-4634-80be-0f995d08ce78')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9d0812e7-d90e-4634-80be-0f995d08ce78')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Suspected Drive-by-download with malicious payload",
+                "description": "detects if a downloaded javascript file from the web is trying to run with WSH and making outbound connections to the internet",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Contributor: Samuel Liu\r\n// Source: NA\r\n// References: https://redcanary.com/threat-detection-report/threats/socgholish/\r\n// Reviewer: Lucas Trainer\r\n//\r\n// Description: In response to socGhoulish attack we had on 1/26/24, \r\n// this is an implementation of a detection that looks for web browser downloads of javascript files and then tries to make a connection outbound from the downloads folder as soon as it lands.\r\n// Handling Guidance: Validate that the connection event was blocked \r\n//\r\n// Query:\r\nlet Browsers_ = dynamic([\"Google Chrome\", \"Microsoft Edge\", \"Brave Browser\", \"FireFox\"]);\r\nDeviceFileEvents\r\n| where InitiatingProcessVersionInfoProductName has_any (Browsers_) //Look for where SRC process is a browser. \r\n| where FileName endswith \".js\" // look for javascript files\r\n| join kind=inner (\r\n    DeviceNetworkEvents\r\n    | where Protocol has \"tcp\"\r\n    | where InitiatingProcessCommandLine has \"WScript.exe\" //look for when WSH is being used for executing\r\n        and InitiatingProcessCommandLine contains \"Downloads\" // from downloads\r\n    | extend FileName0 = tostring(split(InitiatingProcessCommandLine, '\\\\')[-1])\r\n    | extend CommandEnd = tostring(replace_string(FileName0, '\"', ''))\r\n    )\r\n    on DeviceName\r\n| where CommandEnd has FileName // join on logs with same filename and target executing program\r\n| where TimeGenerated < TimeGenerated1 //file event should happen before the network event in sequence\r\n| project TimeGenerated, TimeGenerated1, DeviceName, InitiatingProcessFileName, InitiatingProcessVersionInfoProductName, ActionType1, InitiatingProcessFolderPath1, InitiatingProcessCommandLine1, RemoteUrl, RemotePort, RemoteIP, FileName0",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CommandAndControl",
+                    "Execution",
+                    "InitialAccess",
+                    "Persistence",
+                    "Exfiltration"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "FileName0"
+                            },
+                            {
+                                "identifier": "Directory",
+                                "columnName": "InitiatingProcessFolderPath1"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "RemoteUrl"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "InitiatingProcessCommandLine1"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

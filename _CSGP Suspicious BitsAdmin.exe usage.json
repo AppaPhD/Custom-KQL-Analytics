@@ -1,0 +1,91 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4e01d6ca-4208-49be-a9aa-d61171e94335')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4e01d6ca-4208-49be-a9aa-d61171e94335')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Suspicious BitsAdmin.exe usage",
+                "description": "This KQL query identifies suspicious use of bitsadmin.exe by focusing on specific file transfer commands while excluding known legitimate processes. Attackers may exploit BITSAdmin for stealthy data transfers, leveraging its background operation to bypass security measures and avoid detection.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Analytic Rule Name: BitsAdmin.exe usage\r\n// Contributor: Kamran Ahmadjan\r\n// Reviewer: Sufian Tanveer \r\n// Reference:\r\n//\r\n// Description: This KQL query identifies suspicious use of bitsadmin.exe by focusing on specific file transfer commands while excluding known legitimate processes. Attackers may exploit BITSAdmin for stealthy data transfers, leveraging its background operation to bypass security measures and avoid detection.\r\n// Handling Guidance: Investigate the command-line arguments to ensure they align with legitimate operations. Verify if the file transfers were authorized and check for any unusual patterns or destinations. Reach out to the user to confirm the activity. If the activity is deemed malicious, isolate the affected system, perform a thorough malware scan, and review access logs to assess potential data breaches.\r\n//\r\n// Change notes\r\n// ------------\r\n// 11/19/24 - Kamran Ahmadjan - Excluded \"MmrAgent.NetFxEmulator.exe\" which had lots of false positives\r\nDeviceProcessEvents\r\n| where FileName == \"bitsadmin.exe\"\r\n| where InitiatingProcessCommandLine has_any ('/Transfer', '/AddFile', '/AddFileSet', '/AddFileWithRanges', \"/Upload\", 'Upload', 'Download') or ProcessCommandLine has_any ('/Transfer', '/AddFile', '/AddFileSet', '/AddFileWithRanges', \"/Upload\", 'Upload', 'Download')\r\n| where InitiatingProcessCommandLine !contains \"MDEClientAnalyzer.ps1\"\r\n| where InitiatingProcessCommandLine !contains \"sdiagnhost.exe -Embedding\"\r\n| where InitiatingProcessCommandLine !has \"MmrAgent.NetFxEmulator.exe\"\r\n| project\r\n    TimeGenerated,\r\n    AccountName,\r\n    DeviceName,\r\n    MachineGroup,\r\n    FileName,\r\n    InitiatingProcessCommandLine,\r\n    ProcessCommandLine,\r\n    InitiatingProcessSHA256,\r\n    InitiatingProcessFolderPath",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "DefenseEvasion",
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1197",
+                    "T1011"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ProcessCommandLine"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,86 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f67aa95a-4bf7-4a7d-b92c-ecb3ac0a9c63')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f67aa95a-4bf7-4a7d-b92c-ecb3ac0a9c63')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: O365 - Network Scan Tools Detected in SharePoint / OneDrive",
+                "description": "Description: Detects hacktool names, like empire scripts etc. Technique: T1204.\n\nHandling Guidance: Reach out to the user to determine if they recognize the file and what business use it has. If it is physical security testing for an edge case, have them delete the scanner and use a scanner with a static IP address.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: Obadiah \r\n// Reviewer: Gunther\r\n// Reference: \r\n//\r\n// Description: This rule detects hacktool names, like empire scripts etc. Technique: T1204.\r\n// Handling Guidance: Reach out to the user to determine if they recognize the file and what business use it has. If it is physical security testing for an edge case, have them delete the scanner and use a scanner with a static IP address. \r\n//\r\n// Change notes\r\n// ------------\r\n// 05/01/23 Obadiah Bridges - Added boilerplate, updated query logic, added handling guidance and moved to production. \r\n// 05/16/23 Gunther Abbot - Change string comparisons to array lookups\r\n// Query\r\nOfficeActivity\r\n| where Operation in (\"FileUploaded\", \"FileAccessed\", \"FileDownloaded\")\r\n| where SourceFileExtension has \"exe\"\r\n| where SourceFileName has_any (\"ipscan\", \"ip_scan\", \"ip-scan\", \"netscan\", \"nmap\", \"scanner\", \"superscan\", \"zenmap\", \"nbtscan\", \"enumera\")\r\n| parse UserId with AccountName_ \"@\" UpnSuffix_",
+                "queryFrequency": "PT12H",
+                "queryPeriod": "PT12H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution",
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1204",
+                    "T1046",
+                    "T1040"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName_"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UpnSuffix_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "SourceFileName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

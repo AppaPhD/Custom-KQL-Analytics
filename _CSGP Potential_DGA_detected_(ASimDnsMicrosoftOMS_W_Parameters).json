@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/33bc6f10-0722-4969-b201-cd4ff9b9dc6c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/33bc6f10-0722-4969-b201-cd4ff9b9dc6c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: Potential_DGA_detected_(ASimDnsMicrosoftOMS_W_Parameters)",
+        "description": "Identifies clients with a high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). Alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period).\n\nHandling Guideline:\n1. Identify the Source:\n   - Determine the host generating NXDOMAIN queries.\n   - Identify the process or application responsible.\n\n2. Investigate Scope:\n   - Check if other hosts are querying the same NXDOMAINs.\n   - Look for patterns or coordinated behavior.\n\n3. Assess Threat:\n   - Analyze domain names for signs of DGA, typosquatting, or known malicious indicators.\n   - Review frequency and timing of queries.\n\n4. Response (if suspicious):\n   - Isolate the affected host from the network.\n   - Collect a list of all NXDOMAIN and suspicious domains queried.\n   - Add confirmed domains to IOC and UBL.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "let referencestarttime = 10d;\nlet referenceendtime = 1d;\nlet threshold = 100;\n\n// Function to get NXDOMAIN DNS events within a time range\nlet nxDomainDnsEvents = (stime:datetime, etime:datetime) {\n    ASimDnsMicrosoftOMS_W_Parameters(responsecodename='NXDOMAIN', starttime=stime, endtime=etime)\n    | where DnsQueryTypeName in (\"A\", \"AAAA\")\n    | where ipv4_is_match(\"127.0.0.1\", SrcIpAddr) == false\n    | where DnsQuery !contains \"/\" and DnsQuery contains \".\"\n    | project TimeGenerated, SrcIpAddr, DnsQuery\n};\n\n// Get recent NXDOMAIN activity\nlet recentNX = nxDomainDnsEvents(ago(referenceendtime), now())\n    | extend sld = tostring(split(DnsQuery, \".\")[-2])\n    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount_sld = dcount(sld) by SrcIpAddr\n    | where dcount_sld > threshold;\n\n// Get historical NXDOMAIN activity to filter out known IPs\nlet historicalNX = nxDomainDnsEvents(ago(referencestarttime), ago(referenceendtime))\n    | extend sld = tostring(split(DnsQuery, \".\")[-2])\n    | summarize dcount_sld = dcount(sld) by SrcIpAddr\n    | where dcount_sld > threshold;\n\n// Filter out previously seen IPs\nlet newSuspiciousIPs = recentNX\n    | join kind=leftanti (historicalNX) on SrcIpAddr;\n\n// Get sample NXDOMAIN queries for suspicious IPs\nnxDomainDnsEvents(ago(referencestarttime), now())\n| where SrcIpAddr in (newSuspiciousIPs | project SrcIpAddr)\n| summarize sampleNXDomainList = make_list(DnsQuery, 100) by SrcIpAddr\n| join kind=inner (newSuspiciousIPs) on SrcIpAddr\n| project SrcIpAddr, StartTimeUtc, EndTimeUtc, dcount_sld, sampleNXDomainList\n| extend timestamp = StartTimeUtc, IPCustomEntity = SrcIpAddr\n",
+        "queryFrequency": "P1D",
+        "queryPeriod": "P1D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "techniques": [
+          "T1568",
+          "T1071"
+        ],
+        "subTechniques": [
+          "T1568.002",
+          "T1071.004"
+        ],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

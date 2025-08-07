@@ -1,0 +1,77 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/deaeb99a-9ffb-4bec-b525-ac804a50f1fa')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/deaeb99a-9ffb-4bec-b525-ac804a50f1fa')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: O365 - Suspicious Audit Configuration Policy Operations",
+                "description": "Remove audit configuration policies from the Security & Compliance Center. Technique: T1078",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Obadiah \n// Source:  \n// Reviewer: \n//\n// Description: Remove audit configuration policies from the Security & Compliance Center. Technique: T1078\n// Handling Guidance: Send a teams message to the user to determine what experience they had and if the activity was expected or unexpected.\n//\n// Change notes\n// ------------\n// 05/01/23 Obadiah Bridges - updated boilerplate, added handling guidance, moved to production. \n//\n// Query: \nOfficeActivity \n| where (Operation == \"Remove-AuditConfigurationPolicy\")\n| extend IPCustomEntity = ClientIP\n| extend AccountCustomEntity = UserId\n",
+                "queryFrequency": "PT12H",
+                "queryPeriod": "PT12H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

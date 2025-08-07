@@ -1,0 +1,89 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/846dac0d-29c9-4777-a2a7-07c1edd3f2ae')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/846dac0d-29c9-4777-a2a7-07c1edd3f2ae')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Low",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "entityMappings": [
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "ProcessCommandLine"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountUpn"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "\ud83d\udcd6Summary: Adversaries may create scheduled tasks to maintain persistence on a machine https://attack.mitre.org/techniques/T1053/\n\n\ud83d\udd0eGuidance: Check user's job role to determine if this was done purposefully. Reach out to user to confirm activity. Identify what the scheduled task was trying to perform\n\n\ud83d\udce2Reach out Template: We've detected the creation of a new scheduled task [Name of Scheduled Task]. We need confirmation on its purpose from a security perspective. Please provide the following details immediately: the task's intended function, the user account it runs under, any systems or files it interacts with, its frequency, and any associated risks or privileges. \nThis will ensure the task complies with our security standards and avoids potential vulnerabilities.",
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "tactics": [
+          "Persistence"
+        ],
+        "techniques": [
+          "T1053"
+        ],
+        "subTechniques": [
+          "T1053.005"
+        ],
+        "displayName": "_CSGP: New Scheduled Task Creation via Command Line",
+        "enabled": true,
+        "description": "Adversaries may abuse task scheduling functionality to facilitate initial or recurring execution of malicious code. Utilities exist within all major operating systems to schedule programs or scripts to be executed at a specified date and time. A task can also be scheduled on a remote system, provided the proper authentication is met (ex: RPC and file and printer sharing in Windows environments). Scheduling a task on a remote system typically may require being a member of an admin or otherwise privileged group on the remote system.\n\nHandling Guidance: Check user's job role to determine if this was done purposefully. Reach out to user to confirm activity. Identify what the scheduled task was trying to perform\r\n// Query Modifications: If a specific team seems to be triggering this alert often, add their AccountUpn as an exclusion for this query",
+        "alertRuleTemplateName": null,
+        "query": "// Contributor: stanveer\n// Reviewer: stanveer\n// Reference: \n//\n// Description: Adversaries may create scheduled tasks to maintain persistence on a machine https://attack.mitre.org/techniques/T1053/\n// Handling Guidance: Check user's job role to determine if this was done purposefully. Reach out to user to confirm activity. Identify what the scheduled task was trying to perform\n// Query Modifications: If a specific team seems to be triggering this alert often, add their AccountUpn as an exclusion for this query\n//Change Log\n//10/8/2024: Updated query logic to search for all scheduled task creations. Exlcuded sys and svc groups. Added job title and richment for cadence of scheduled task\n//12/31/2024 - Wajahat Malik - Added Jared as an exclusion based on his username and device\n//01/02/2025 - James Kim - Enabled alert grouping\n//1/24/2025 - Adrian & Anthony - Added \"C:\\\\chef\",\"nvm.exe\",\"WZUpdateNotifier.exe\",\"CheckASRConfigUtility.exe\" to exclusion list for FP events\n//07/30/2025 - Sky Tran - added Jawset Postshot to exclusion list \nlet excludedKeywords = dynamic([\"CLToast.exe\", \"Adobe\",\"C:\\\\chef\",\"nvm.exe\",\"WZUpdateNotifier.exe\",\"CheckASRConfigUtility.exe\", \"postshot.exe\"]);\nlet ProcessEvents = DeviceProcessEvents\n    | where TimeGenerated >= ago(24h)\n    | where FileName == \"schtasks.exe\"\n    | where AccountName !in (\"system\", \"syst\u00e8me\", \"svccgopsprd\", \"svctfsserviceprd\")\n    | where ProcessCommandLine contains \"/sc\" //Searches for usage of schedule task creation\n    | where not(AccountName == \"jbartola\" and DeviceName == \"dcjbartola-5680\")// expected activity from Jared\n    | where not(ProcessCommandLine has_any(excludedKeywords)) //Exceptions\n    | extend Cadence = case(\n                           ProcessCommandLine contains \"ONLOGON\",\n                           \"Login Activated\",\n                           ProcessCommandLine contains \"HOURLY\",\n                           \"Hourly\",\n                           ProcessCommandLine contains \"DAILY\",\n                           \"Daily\",\n                           ProcessCommandLine contains \"WEEKLY\",\n                           \"Weekly\",\n                           ProcessCommandLine contains \"MONTHLY\",\n                           \"Monthly\",\n                           ProcessCommandLine contains \"MINUTE\",\n                           \"Every Minute\", \n                           ProcessCommandLine contains \"MO 60\",\n                           \"Every Hour\", \n                           ProcessCommandLine contains \"ONCE\",\n                           \"One-Time\", \n                           \"Other\"\n                       ); // Default case if none match\nlet JobTitle = IdentityInfo\n    | where TimeGenerated >= ago(3d)\n    | where IsAccountEnabled == true\n    | extend AccountName = tolower(AccountName)\n    | distinct AccountName, JobTitle, Manager;\nProcessEvents\n| join kind=leftouter JobTitle on $left.AccountName == $right.AccountName\n| project\n    TimeGenerated,\n    JobTitle,\n    AccountName,\n    AccountUpn,\n    DeviceName,\n    Cadence,\n    InitiatingProcessCommandLine,\n    ProcessCommandLine"
+      }
+    }
+  ]
+}

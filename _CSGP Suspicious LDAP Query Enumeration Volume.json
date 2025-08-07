@@ -1,0 +1,100 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ae381910-6c9d-4314-8f57-44bde6aede8e')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ae381910-6c9d-4314-8f57-44bde6aede8e')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Suspicious LDAP Query Enumeration Volume",
+                "description": "This Analytic detects when a device is exhibiting suspicious activity patterns related to LDAP enumeration. Often times systems will run tests and troubleshooting on some servers and send large quantities of LDAP queries to verify functionality. Another thing that happens frequently is Rapid7 scanning that routinely happens\n\nHandling Guidance: \nBloodhound is a tool used to scan for vulnerable accounts and devices that might be a good target for the next lateral movement. To investigate, look up the device name and determine whether this device should be using LDAP queries at all. Is it a technical user? is it a server? What is the server's role? Can you find this on Axonius?\nWorse case, reach out to the last used person on the device and check with them.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributors: Samuel Liu\r\n// Reviewers:\r\n//\r\n// Description: Detect suspicious volume of LDAP queries, Indicative of bloodhound recon\r\n// Handling Guidance: 1. reach out to user to confirm\r\n//                    2. Check the destinations of the query targets and check if they are sensitive machines\r\n//                    3. Verify recent sign in logs of the device owner\r\n// update 6/25/25 - Refactored logic to be significantly less expensive and use a different approach for detecting\r\nlet lowpassfilter = 15;\r\nlet scorethreshold = 10.5;\r\nlet step_ = 2h;\r\nlet lookback = 5h;\r\nIdentityQueryEvents\r\n| where ActionType == \"LDAP query\"\r\n//theory: exclude domain controller's destination since real LDAP enumeration would go past just domain controllers\r\n| where not(DestinationDeviceName matches regex @\"^cg\\d{2}dcu\" or DestinationDeviceName  contains \"dccostar\" or DestinationDeviceName contains \"usrodc\") \r\n| where DeviceName != IPAddress //exclude loopback targeting\r\n| extend TO_DEVICE_ = tostring(AdditionalFields.[\"TO.DEVICE\"])\r\n| make-series Events=count_distinct(Query) default=0 on TimeGenerated in range(ago(14d), now(), step_) by DeviceName, IPAddress //count the number of distinct queries fired from a single device\r\n| summarize EventCount=make_list(Events, 1000), TimeGenerated=make_list(TimeGenerated, 1000) by DeviceName, IPAddress\r\n| extend (outliers, score, baseline) = series_decompose_anomalies(EventCount, scorethreshold, 12, \"linefit\") //anomaly detection with statistics\r\n| mv-expand\r\n    TimeGenerated,\r\n    EventCount to typeof(long),\r\n    outliers,\r\n    baseline to typeof(long),\r\n    score to typeof(double)\r\n| where outliers > 0 //filter for behavioral anomalies\r\n| extend DeviceName = tolower(DeviceName) \r\n| extend DeviceName = iff((DeviceName contains \"costar\") or (DeviceName contains \"wwstar\"), tostring(split(DeviceName, \".\")[0]), DeviceName) //normalize devicename\r\n| where EventCount >= lowpassfilter //low pass filter\r\n| extend TimeGenerated = todatetime(TimeGenerated)\r\n| where TimeGenerated > ago(lookback) //detection period\r\n| join kind=inner ( //enrichment table\r\n    IdentityQueryEvents\r\n    | where TimeGenerated > ago(lookback)\r\n    | extend DeviceName = tostring(split(DeviceName, \".\")[0])\r\n    | where ActionType == \"LDAP query\"\r\n    | distinct DeviceName, DestinationDeviceName, Query, QueryTarget\r\n    | summarize Queries = make_set(Query), QueryTargets = make_set(QueryTarget), DestinationDevices = make_set(DestinationDeviceName) by DeviceName)\r\n    on DeviceName\r\n| project TimeGenerated, DeviceName, IPAddress, EventCount, score, baseline, outliers, DestinationDevices, Queries, QueryTargets",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "LateralMovement",
+                    "Discovery"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Anomalous Volume of LDAP Queries on {{DeviceName}} ",
+                    "alertDescriptionFormat": "The device: {{DeviceName}} sent {{EventCount}} queries to targets {{QueryTargets}} \n\nHandling Guidance Template:\n\n\"Dear (username) We had a detection for a recent surge in LDAP queries on the machine (devicename) . We typically look for this traffic as it can be an indication of an attacker sniffing for AD rights and relations to use for abuse. \n\nThis occurred around (approx. time)\n\nWe need to confirm that this was expected activity.\"",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "Queries"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DestinationDevices"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

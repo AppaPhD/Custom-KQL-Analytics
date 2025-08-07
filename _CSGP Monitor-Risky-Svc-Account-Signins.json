@@ -1,0 +1,101 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6dcf36ef-01ff-4454-ad82-036340aa2ece')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6dcf36ef-01ff-4454-ad82-036340aa2ece')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP Monitor-Risky-Svc-Account-Signins",
+                "description": "This query monitors a custom list of potentially risky service accounts (SVC accounts) for any Active Directory sign-ins, providing detailed information about which service accounts are signing into specific applications. It also tracks the associated IP addresses and geographic locations, such as city and country, to further enrich this Incident for investigation. By correlating the IP address of each sign-in against a watchlist of known IP ranges, the query can identify unauthorized access attempts. This process ensures that sign-ins from unapproved or unusual locations can be flagged for further investigation.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contributor: Obadiah Bridges, Kamran Ahmadjan\r\n// Source:  \r\n// Reviewer: \r\n//\r\n// Description: This query monitors a custom list of potentially risky service accounts (SVC accounts) for any Active Directory sign-ins, providing detailed information about which service accounts are signing into specific applications. It also tracks the associated IP addresses and geographic locations, such as city and country, to further enrich this Incident for investigation. By correlating the IP address of each sign-in against a watchlist of known IP ranges, the query can identify unauthorized access attempts. This process ensures that sign-ins from unapproved or unusual locations can be flagged for further investigation. \r\n//......\r\n// Handling Guidance: Determine who is behind the activity by investigating the origin of the sign-in and whether it aligns with the expected use of the service account. Assess if the login corresponds to regular business operations, such as automated tasks or scheduled jobs, or if it deviates from typical patterns, raising suspicion. If the activity appears unusual\u2014such as sign-ins from unfamiliar locations or outside normal hours\u2014it this account should be dealt with accordingly in the form of revoking sessions\r\n//\r\n// Change notes\r\n// ------------\r\n// 4/26/2023 Obadiah Bridges - Updated boilerplate, description, and handling guidance, added entity mappings, edited query logic. \r\n//\r\n//3/24/25 Renee Sen - Updated the IP address watchlist\r\n//4/10/25 Dian G - Added IP ranges from ASN 14652 to watchlist\r\n// Query:\r\nlet CostarIP = toscalar(\r\n    _GetWatchlist('Costar_Public_IP_Ranges')\r\n    | summarize l=make_list(cidr)\r\n);\r\nlet svcAccountList = _GetWatchlist('SvcAccounts')\r\n    | summarize make_set(SearchKey);\r\nSigninLogs \r\n| where UserPrincipalName contains 'svc'\r\n| where split(UserPrincipalName, '@')[0] has_any(svcAccountList)\r\n| mv-apply l = CostarIP to typeof(string) on \r\n    (\r\n    extend IpMatch = (ipv6_is_match(IPAddress, l))\r\n    )\r\n| where IpMatch == false\r\n| extend City = LocationDetails.city \r\n| extend NetworkNames = parse_json(tostring(parse_json(NetworkLocationDetails)[0].networkNames))[0] \r\n| extend NetworkType = parse_json(NetworkLocationDetails)[0].networkType \r\n| extend Country = LocationDetails.countryOrRegion\r\n| extend SVCSigninAccount = SignInIdentifier \r\n| extend AppThatWasLoggedInto = AppDisplayName\r\n| summarize arg_max(TimeGenerated, *) by SVCSigninAccount\r\n| project TimeGenerated, UserDisplayName, SVCSigninAccount, AppThatWasLoggedInto, IPAddress, City, Country, NetworkNames, NetworkType",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 1,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1110"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "UserDisplayName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AppId",
+                                "columnName": "AppThatWasLoggedInto"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "SVCSigninAccount"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

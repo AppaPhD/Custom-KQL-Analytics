@@ -1,0 +1,66 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/869eda0e-e4df-4dce-bf75-9147ec510f8f')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/869eda0e-e4df-4dce-bf75-9147ec510f8f')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Palo Alto FW Rule Event Volume Anomaly",
+                "description": "Identifies anomalous volume of events logged for a FW (FireWall) rule. This may indicate a misconfiguration or DoS possible attack, \n\nHandling Guidance: Evaluate which FW rule is resulting in increased events logged and determine the source of the traffic. Work with Networking team or the system owner to create a more specific FW rule or fix whatever behavior is causing the increased volume. \n\nThe query leverages KQL built-in anomaly detection algorithms to find large deviations from baseline patterns.\n\nSudden increases in execution frequency of sensitive processes should be investigated to determine the root cause.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// Contribution: Samuel Liu\r\n// Description: this is a detection that is used more as a tool to detect when there are super high influxes of log ingesting\r\n// this could potentially signal a misconfiguration with the logging architecture and should be fixed.\r\nlet starttime_ = 14d;\r\nlet step_ = 4h;\r\nlet scorethreshold = 3.5;\r\nlet percentthreshold = 1000; //adjust this to filter what percent deviation from the baseline you want to measure\r\nlet eventcountthreshold = 1500000;\r\nlet zones_ = PaloAltoFW_Base\r\n| where TimeGenerated >= ago(48h)\r\n| summarize make_set(SrcZone, 500), make_set(DstZone, 500) by NetworkRuleName;\r\nPaloAltoFW_Base\r\n| where TimeGenerated >= ago(starttime_)\r\n| where isnotempty(NetworkRuleName)\r\n| project TimeGenerated, Activity, NetworkRuleName, DvcOriginalAction | order by TimeGenerated\r\n| summarize Events=count() by NetworkRuleName, DvcOriginalAction, bin(TimeGenerated,step_)\r\n| summarize EventCount=make_list(Events,500),TimeGenerated=make_list(TimeGenerated,500) by NetworkRuleName\r\n| extend (outliers_, score, baseline) = series_decompose_anomalies(EventCount, scorethreshold, -1, \"linefit\") //added scorethreshold to filter out some rules that don't seem too anomalous\r\n//| project NetworkRuleName, outliers_\r\n| mv-expand TimeGenerated, EventCount to typeof(long), outliers_, baseline to typeof(long), score to typeof(double)\r\n| where outliers_ == 1\r\n| extend PercentChange = round(((EventCount - baseline) / baseline) * 100, 5)\r\n| where PercentChange >= percentthreshold //filter for percent deviation from baseline\r\n| where EventCount >= eventcountthreshold\r\n| join kind=leftouter zones_ on $left.NetworkRuleName == $right.NetworkRuleName\r\n| where TimeGenerated >= ago(6h)\r\n| extend report = strcat(\"Rule: (\", NetworkRuleName, \") is \",PercentChange,\"% over the baseline of: \",baseline,\" with \",EventCount,\" events at score: \",score,\".\")",
+                "queryFrequency": "PT6H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Discovery"
+                ],
+                "techniques": [
+                    "T1046"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Palo Alto FW Rule Event Volume Anomaly",
+                    "alertDescriptionFormat": "Identifies anomalous volume of events logged for a FW rule. This may indicate a misconfiguration or possible attack, \n\nHandling Guidance: Evaluate which FW rule is resulting in increased events logged and determine the source of the traffic. Work with Networking team or the system owner to create a more specific FW rule or fix whatever behavior is causing the increased volume. \n\nThe query leverages KQL built-in anomaly detection algorithms to find large deviations from baseline patterns.\n\nSudden increases in execution frequency of sensitive processes should be investigated to determine the root cause.",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "Report": "report"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

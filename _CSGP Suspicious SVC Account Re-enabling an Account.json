@@ -1,0 +1,97 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/96d3415b-ee28-4af7-a578-3f7cdef8f722')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/96d3415b-ee28-4af7-a578-3f7cdef8f722')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT5H",
+        "queryPeriod": "PT5H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "TargetAccountDisplayName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "ActorAccountDisplayName"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "ProcessId",
+                "columnName": "first_enabled_time"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "ProcessId",
+                "columnName": "TargetLastActive"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Previously disabled account {{TargetAccountDisplayName}} was re-enabled by a SVC account {{ActorAccountDisplayName}} ",
+          "alertDescriptionFormat": "SVC account with a investigation priority {{ActorAccountScore}}  has re-enabled a previously disabled account, potentially could be a sign of lateral movement and privilege escalation. \nHappened from {{SourceIPAddress}}. Target account was last active: {{TargetLastActive}} ",
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "PrivilegeEscalation",
+          "LateralMovement"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "displayName": "_CSGP: Suspicious SVC Account Re-enabling an Account",
+        "enabled": true,
+        "description": "this analytic looks for account re-enabling events by other accounts. it is looking for persistence and lateral movement techniques performed by an attacker\n\nthis analytic searches for when a SVC account is re-enabled by another account when the account was disabled before. Look for the earliest time when the account enabling event happens and check for account disabled statuses before that event time,\nIf isAccountEnabled == false anytime within the past 2 days, then this is deemed as suspicious\n\nHandling Guidance: \n1. check device history and make sure there are not any suspicious log ins to that device. \n2. Determine the purpose of re-enabling this account, if this was a previously disabled account, there must be some business justification for it. Is the re-enabled account have high permissions? Does it need to used? Does the account look like it should be re-enabled?\n3. if none of these answers are good, escalate to a senior triager",
+        "alertRuleTemplateName": null,
+        "query": "// Contributors: Samuel Liu\n// Reviewers: \n// Description: this analytic searches for when a SVC account is re-enabled by another account when the account was disabled before\n//              look for the earliest time when the account enabling event happens and check for account disabled statuses before that event time,\n//              if isAccountEnabled == false anytime within the past 2 days, then this is deemed as suspicious\n// Handling Guidance: check device history and make sure there are not any suspicious log ins to that device\nlet UEBA_data = (\n    BehaviorAnalytics\n    | where TimeGenerated > ago(14d)\n    | where isnotempty(UserName)\n    | where InvestigationPriority != 0\n    | summarize\n        most_recent_action=arg_max(TimeGenerated, *),\n        InvestigationPriority=arg_max(InvestigationPriority, *)\n        by UserName, ActivityType\n    | project\n        most_recent_action,\n        UserName,\n        ActivityType,\n        InvestigationPriority,\n        SourceIPAddress,\n        SourceIPLocation,\n        SourceDevice);\nIdentityDirectoryEvents\n| where TimeGenerated > ago(12h) //filter for recent results\n| where ActionType has \"Account Enabled\"\n//| where TargetAccountDisplayName contains \"svc\"\n| where AccountName contains \"svc\"\n| extend TARGET_OBJECT_DEVICE_ = tostring(AdditionalFields.[\"TARGET_OBJECT.DEVICE\"])\n| summarize first_enabled_time=arg_min(TimeGenerated, *) by TargetAccountDisplayName\n| join kind=leftouter (IdentityInfo\n    //| where AccountName contains \"svc\"\n    | summarize by TimeGenerated, IsAccountEnabled, AccountName)\n    on $left.TargetAccountDisplayName == $right.AccountName\n| where TimeGenerated < first_enabled_time //look before the re-enable action\n| where IsAccountEnabled == false\n| summarize last_disabled = arg_max(TimeGenerated, *) by first_enabled_time, ActionType, AccountDisplayName, TargetAccountDisplayName\n| join kind=leftouter UEBA_data on $left.AccountDisplayName == $right.UserName\n| extend InvestigationPriority = iff(isempty(InvestigationPriority), 10, toint(InvestigationPriority))\n| join kind=leftouter UEBA_data on $left.TargetAccountDisplayName == $right.UserName\n| project\n    first_enabled_time,\n    last_disabled,\n    most_recent_action,\n    most_recent_action1,\n    ActionType,\n    InvestigationPriority,\n    AccountDisplayName,\n    InvestigationPriority1,\n    TargetAccountDisplayName,\n    Application,\n    IsAccountEnabled,\n    AdditionalFields,\n    ActivityType,\n    SourceIPAddress,\n    SourceIPLocation,\n    SourceDevice\n| project-rename\n    TargetAccountScore = InvestigationPriority1,\n    ActorAccountScore = InvestigationPriority,\n    ActorAccountDisplayName = AccountDisplayName,\n    ActorLastActive = most_recent_action,\n    TargetLastActive = most_recent_action1\n| where ActorAccountScore > 1 or TargetAccountScore > 1\n| where isnotempty(TargetLastActive) //if re-enabled account is not doing anything, its probably not suspicious"
+      }
+    }
+  ]
+}

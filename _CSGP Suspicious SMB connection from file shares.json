@@ -1,0 +1,87 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8b90f309-bd49-4445-a6bd-7e9529532bd4')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8b90f309-bd49-4445-a6bd-7e9529532bd4')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Suspicious SMB connection from file shares",
+                "description": "this analytic is the compliment to the other smb analytic we have that excludes file shares. This one looks particularly at the file shares for events.\n\nHandling Guidance:\n1. reach out to owner of device to confirm activity\n2. Check the destinations of the query targets and check if they are sensitive files\n3. Verify recent sign in logs of the device owner",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributors: Samuel Liu\r\n// Reviewers:\r\n//\r\n// Description: Detect suspicious volume of SMB connections to file shares and looks for strange processes initiated by low prevalence files\r\n// Handling Guidance: 1. reach out to owner of device to confirm activity\r\n//                    2. Check the destinations of the query targets and check if they are sensitive files\r\n//                    3. Verify recent sign in logs of the device owner\r\nlet red_team_devices = (DeviceInfo\r\n| where TimeGenerated > ago(60d)\r\n| distinct DeviceName, DeviceId, MachineGroup, JoinType\r\n| where MachineGroup has \"Red Team\");\r\nlet excluded_folderpath = dynamic([\r\n    @\"c:\\windows\\system32\\ntoskrnl.exe\",\t\r\n    @\"c:\\program files (x86)\\zscaler\\zsatunnel\\zsatunnel.exe\", \r\n    @\"microsoft.tri.sensor.exe\",\r\n    @\"c:\\program files\\oracle\\virtualbox\\virtualboxvm.exe\",\r\n    @\"c:\\program files\\oracle\\virtualbox\\vboxheadless.exe\",\r\n    @\"c:\\program files\\avast software\\avast\\avastsvc.exe\",\r\n    @\"c:\\program files\\zscaler\\zsatunnel\\zsatunnel.exe\"\r\n    ]);\r\nlet failed_signins = (SigninLogs\r\n| where TimeGenerated > ago(7d)\r\n| where ResultDescription contains \"fail\"\r\n| summarize last_fail = arg_max(TimeGenerated,*), count() by UserPrincipalName\r\n| where UserPrincipalName contains \"@\"\r\n| extend UPN = tostring(split(UserPrincipalName, \"@\")[0])\r\n| extend deviceId_ = tostring(DeviceDetail.deviceId)\r\n| where count_ > 3 //using 3 failed signins since thats the lockout threshhold\r\n| project last_fail, count_, Identity, UPN, UserPrincipalName, DeviceDetail, deviceId_, ResultType, ResultDescription);\r\nDeviceNetworkEvents\r\n| where ActionType has \"ConnectionSuccess\"\r\n| where RemotePort == 445 //SMB connection\r\n| where InitiatingProcessFileName !has \"System\"\r\n| where InitiatingProcessId != 4 // NT Kernel & System\r\n| where not (InitiatingProcessFolderPath has_any(excluded_folderpath))\r\n| where DeviceName contains \"file\" or RemoteUrl contains \"file\"\r\n| where InitiatingProcessCommandLine !contains \"WdiServiceHost\"\r\n| extend UPN = tostring(split(DeviceName, \".\")[0])\r\n| join kind=leftanti red_team_devices on DeviceName //exclude red team devices\r\n| join kind=leftouter failed_signins on $left.DeviceId == $right.deviceId_ //cross check failed signin attempts\r\n| join kind=leftouter DeviceFileName_ref() on $left.InitiatingProcessFileName == $right.FileName \r\n//| where count_distinct_DeviceName < 10 // look for low file prevalence\r\n//| project-reorder TimeGenerated, DeviceName, InitiatingProcessAccountName, RemoteUrl, LocalIP, RemoteIP, InitiatingProcessCommandLine\r\n| project-reorder TimeGenerated, DeviceName, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFileName, \r\n                    count_distinct_DeviceName, InitiatingProcessSHA1, InitiatingProcessParentFileName\r\n| project-rename FilePrevalence = count_distinct_DeviceName\r\n| where FilePrevalence < 100 //low file prevalence means that its more suspicious",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Exfiltration"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingProcessFileName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "RemoteUrl"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

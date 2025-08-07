@@ -1,0 +1,97 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e0d5ec40-f56f-4767-8450-d33b3cac388c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e0d5ec40-f56f-4767-8450-d33b3cac388c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT5H",
+        "queryPeriod": "P14D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Low",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "DeviceName"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "InitProcess"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "DestIP"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "DestURL"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Handling guidance: Review the logs for any suspicious connections (SMB connections to public IPs or from public IPs). If there are any public connections, check the Local and Remote IP traffic in Qradar or in Sentinel for any suspicious process executing C2 connections. Evaluate the source process, command line, user, and destination to identify what is happening and determine whether the activity is benign or malicious. Esclate to the Endpoint team if malicious activity is suspected.",
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "Reconnaissance",
+          "Discovery",
+          "LateralMovement"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "displayName": "_CSGP: SMB Suspicious Enumeration",
+        "enabled": true,
+        "description": "This rule detects unusual SMB activity from devices, it could be data transfer from one device to another in a legitimate way.\n\nHandling guidance: Review the logs for any suspicious connections (SMB connections to public IPs or from public IPs). If there are any public connections, check the Local and Remote IP traffic in Qradar or in Sentinel for any suspicious process executing C2 connections. Evaluate the source process, command line, user, and destination to identify what is happening and determine whether the activity is benign or malicious. Escalate to the Endpoint team if malicious activity is suspected.",
+        "alertRuleTemplateName": null,
+        "query": "// Analytic Rule Name Suspicious SMB Enumeration\n//\n// Contributor: Samuel Liu\n// Source: NA\n// Reviewer: Lucas Trainer\n//\n// Description: This analytic rule detects outbound SMB traffic from endpoint devices that deviates normal / expected traffic.\n//\n// Handling guidance: Review the logs for any suspicious connections (SMB connections to public IPs or from public IPs). \n// If there are any public connections, check the Local and Remote IP traffic in Qradar or in Sentinel for any suspicious process executing C2 connections.\n// Evaluate the source process, command line, user, and destination to identify what is happening and \n// determine whether the activity is benign or malicious. Escalate to the Endpoint team if malicious activity is suspected.\n//\n// Reference: NA\n//\n// 5/19/25 - sliu - complete refactored logic to be less over attenuated to extreme events\n// 6/2/25 - sliu - tuned in PID 4 and raised thresholds and also excluded more domain controllers\n// Query:\nlet radius = 1h; // radius of events around the anomaly time\nDeviceNetworkEvents\n| where RemotePort == 445 and ActionType == \"ConnectionSuccess\"\n| where InitiatingProcessId !in (0) and LocalIP !has \"127.0.0.1\"// Exclude OS-internal processes (PID 0 and 4 are System/Idle) to avoid noise, 127.0.0.1 is a loopback address\n| where not(DeviceName matches regex @\"^cg\\d{2}dcu\" or DeviceName  contains \"dccostar\" or DeviceName contains \"usrodc\") //this is a limitation of the analytic, its completely blind to domain controllers\n| where InitiatingProcessVersionInfoProductName !has \"Azure Advanced Threat Protection\" //Azure Security Sensor\n| where InitiatingProcessCommandLine !has \"C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender Advanced Threat Protection\\\\\" //exclude Defender logs\n| where InitiatingProcessAccountName !has \"appviewx\" //https://costar-group-prod-dev.atlassian.net/wiki/spaces/SYSP/pages/194378047/AppViewX\n| where DeviceName !has \"atlnwmon01\" //excluding BigFix relay server (if this is compromised we have bigger problems)\n| make-series UniqueEvents=dcount(RemoteIP), default=0 on TimeGenerated in range(ago(14d), now(), 2h) by LocalIP, DeviceName\n| extend (outliers, score, baseline) = series_decompose_anomalies(UniqueEvents, 3.5, 12, \"linefit\")\n| project-reorder DeviceName, UniqueEvents, outliers, score, baseline\n| mv-expand TimeGenerated, UniqueEvents to typeof(long), outliers, baseline to typeof(long), score to typeof(double)\n| where todatetime(TimeGenerated) > ago(6h) //look for only anomalies from the past day\n| where outliers > 0 \n| where UniqueEvents > 100 //most red team activity would  100+\n| extend start_radius = todatetime(TimeGenerated - radius)\n| extend end_radius = todatetime(TimeGenerated + radius)\n| join kind=leftouter (\n    DeviceNetworkEvents\n    | where TimeGenerated > ago(1d)\n    | where ActionType has \"ConnectionSuccess\" and RemotePort == 445\n    | where InitiatingProcessId !in (0) \n    | where LocalIP !has \"127.0.0.1\"\n    | where not(DeviceName matches regex @\"^cg\\d{2}dcu\" or DeviceName  contains \"dccostar\" or DeviceName contains \"usrodc\")) on DeviceName\n| where TimeGenerated1 between (start_radius .. end_radius)\n| summarize DestIP = make_set(RemoteIP), DestURL = make_set(RemoteUrl), InitProcess = make_set(InitiatingProcessCommandLine), UniqueEvents = make_set(UniqueEvents), Scores = make_set(score), Baselines = make_set(baseline), count() by DeviceName\n| extend DestURL = tostring(DestURL), DestIP = tostring(DestIP)"
+      }
+    }
+  ]
+}
