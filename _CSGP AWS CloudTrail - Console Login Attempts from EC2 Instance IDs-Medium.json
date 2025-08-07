@@ -1,0 +1,99 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ece37cfb-e385-45b0-a889-d2832b165b8d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ece37cfb-e385-45b0-a889-d2832b165b8d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Console Login Attempts from EC2 Instance IDs-Medium",
+                "description": "Detects console login attempts from EC2 instance IDs.\n\nHandling guidance: Review how the instance role or user was able to login into the console. Permissions should not be granted to make this possible.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Contributor: Vivian Tran\r\n//Reference: \r\n//Description: This analytic rule detects attempts to login into the console via ec2 instance ids\r\n//This can happen if an instance was compromised and an attacker was attempting to gain \r\n// persistance or login to the console\r\n//Handling guidance: Review how the instance role or user was able to login into the console. Permissions should not be granted to make this possible.\r\n//\r\nAWSCloudTrail\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| where EventName == 'ConsoleLogin'\r\n| where UserIdentityPrincipalid contains 'i-'\r\n| project\r\n    TimeGenerated,\r\n    AccountName,\r\n    EventSource,\r\n    EventName,\r\n    UserIdentityArn,\r\n    UserIdentityAccountId,\r\n    SessionIssuerUserName,\r\n    SessionIssuerArn,\r\n    SessionIssuerAccountId,\r\n    ErrorCode,\r\n    ErrorMessage,\r\n    RequestParameters,\r\n    ResponseElements,\r\n    SourceIpAddress",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1078"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ProcessId",
+                                "columnName": "ResponseElements"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

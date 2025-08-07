@@ -1,0 +1,101 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f5fc4710-7e7a-499b-9e9c-4934d9c93918')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f5fc4710-7e7a-499b-9e9c-4934d9c93918')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Trail Config Altered-High",
+                "description": "Detects when a cloudtrail configuration has been altered. This is considered high risk and can be used to turn off/modify activity monitoring for an entire AWS account/organization. \n\nHandling guidance: Confirm with secops that this modification was expected/authorized.",
+                "severity": "High",
+                "enabled": true,
+                "query": "// Author: Jeremy Kesterson\r\n// Source:  NA\r\n// Reviewer: Henry Cox\r\n//\r\n// Description: Detects when a cloudtrail configuration has been altered. This is considered high risk and can be used to turn off/modify activity monitoring for an entire AWS account/organization. \r\n// Handling guidance: Confirm with secops that this modification was expected/authorized.\r\n//\r\n// Query:\r\nAWSCloudTrail\r\n| where EventName == 'UpdateTrail'\r\n| extend Environment_ = tostring(parse_json(RequestParameters).s3KeyPrefix)\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2] \r\n| extend AccountName = name\r\n| project TimeGenerated,\r\nUserIdentityArn,\r\nAccountName,\r\nEventName,\r\nEnvironment_,\r\nRequestParameters,\r\nResponseElements,\r\nErrorCode,\r\nSourceIpAddress,\r\nSessionIssuerArn,\r\narn",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion",
+                    "Collection",
+                    "Reconnaissance"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT3H",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "AWS CloudTrail - Trail Config Altered-High",
+                    "alertDescriptionFormat": "Detects when a cloudtrail configuration has been altered. This is considered high risk and can be used to turn off/modify activity monitoring for an entire AWS account/organization. \nHandling guidance: Confirm with secops that this modification was expected/authorized.\n\nUserIdentityArn: {{UserIdentityArn}} <br>\nSessionIssuerArn: {{SessionIssuerArn}} <br>\nEnvironment: {{Environment_}} <br>",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Environment_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

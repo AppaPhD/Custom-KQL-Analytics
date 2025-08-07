@@ -1,0 +1,102 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/88efa3e9-aba8-4c08-926a-3e345ec8f546')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/88efa3e9-aba8-4c08-926a-3e345ec8f546')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Root Login-Medium",
+                "description": "Detects logins from root user in AWS. Root user should only be used for account onboarding/account maintenance on rare occasions and is heavily locked down.\n\nHandling guidance: Check the onboarding Pipeline \"aws-new-account-onboarding\" at https://tfs.prd.costargroup.com/CoStarCollection/CSGP%20SecOps/_build?definitionId=8526 and open the latest run, hit \"Run new\", open \"Variables\", and view the \"account_email\".\nLook at the SCSP queue in Jira for a ticket requesting root access, typically containing the keywords \"root access\".\nReach out to secops to confirm root credential use-case.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  \r\n//Reviewer: James Kim. Vivian Tran\r\n//Description: Detects logins from root user in AWS. Root user should only be used for account onboarding/account maintenance on rare occasions and is heavily locked down.\r\n//Handling guidance: Check the onboarding Pipeline \"aws-new-account-onboarding\" at https://tfs.prd.costargroup.com/CoStarCollection/CSGP%20SecOps/_build?definitionId=8526 and open the latest run, hit \"Run new\", open \"Variables\", and view the \"account_email\".\r\n//Look at the SCSP queue in Jira for a ticket requesting root access, typically containing the keywords \"root access\".\r\n//Reach out to secops to confirm root credential use-case.\r\nAWSCloudTrail\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| where UserIdentityType == 'Root'\r\n| where EventTypeName == 'AwsConsoleSignIn'",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess",
+                    "InitialAccess",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "AccountName": "name",
+                    "UserIdentityArn": "UserIdentityArn",
+                    "EventName": "EventTypeName",
+                    "SourceIPAddress": "SourceIpAddress"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "name"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityType"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "EventTypeName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

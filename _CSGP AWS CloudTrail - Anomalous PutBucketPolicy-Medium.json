@@ -1,0 +1,100 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1c68235d-b377-4c1c-a663-3433a435cccf')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1c68235d-b377-4c1c-a663-3433a435cccf')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Anomalous PutBucketPolicy-Medium",
+                "description": "Detects when a principal performs s3:PutBucketPolicy. This could indicate potential unauthorized access to the bucket, where an attacker allows an unauthorized user permissions to access it or make changes.\n\nHandling Guidance: Review the bucket policy in Wiz by searching the bucket name, open the JSON details, and validate the bucketPolicy field to confirm if access is allowed to an unfamiliar account/identity or if the policies are permissive. Reach out to the associated user / team (if applicable) for more details. Confirm with secops that this is authorized and expected.\n\nHandling guidance: Review bucket policy to confirm if access is allowed by unfamiliar account/identity. Reach out to the associated user / team (if applicable) for more details. Confirm with secops that this is authorized and expected.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Contributor: Shihab Nouh, Kamran Ahmadjan\r\n//Reference: https://stratus-red-team.cloud/attack-techniques/AWS/aws.exfiltration.s3-backdoor-bucket-policy/\r\n//Reviewer: James Kim, Vivian Tran\r\n//Description: Detects when a principal performs s3:PutBucketPolicy. This could indicate potential unauthorized access to the bucket to an SSO role or a third-party attacker.\r\n//Handling guidance: Review the bucket policy in Wiz by searching the bucket name, open the JSON details, and validate the bucketPolicy field to confirm if access is allowed to an unfamiliar account/identity or if the policies are permissive. Reach out to the associated user / team (if applicable) for more details. Confirm with secops that this is authorized and expected.\r\n// 2/24/25: Excluded Bucket fetch-flagd-prd as expexted GitHub script automation to update from repo. aedelstein\r\nlet useridarn = dynamic([\"_sbx\" ]); //write exclusions here for USERIDENTIFARN\r\nlet sessionusername = dynamic([\"CSGPBuildAgentRole\"]); //write exclusions here for SessionIssuerUserName\r\nlet excludedBudketName = dynamic ([\"fetch-flagd-prd\"]);\r\nAWSCloudTrail\r\n| where EventName == \"PutBucketPolicy\"\r\n| where not(SessionIssuerUserName has_any (sessionusername))\r\n//| where ErrorMessage != \"Access Denied\"\r\n| where not(UserIdentityArn has_any (useridarn))\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| extend BucketName = parse_json(RequestParameters)\r\n| where not (BucketName has_any (excludedBudketName))\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| project TimeGenerated, UserIdentityArn, UserIdentity, EventName, EventTypeName, UserAgent, AccountName, SourceIpAddress, BucketName = BucketName.bucketName, BucketPolicy = BucketName.bucketPolicy",
+                "queryFrequency": "PT12H",
+                "queryPeriod": "PT12H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation",
+                    "Reconnaissance"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{UserIdentity}} Updated the Bucket: {{BucketName}} ",
+                    "alertDescriptionFormat": "{{UserIdentity}} updated the bucket: {{BucketName}} with the following bucket policy {{BucketPolicy}} ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "AzureResource",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ResourceId",
+                                "columnName": "BucketName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

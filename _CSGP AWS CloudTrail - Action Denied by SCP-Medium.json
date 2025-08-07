@@ -1,0 +1,92 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4e02312f-83a0-4083-8872-f3ab4c625a10')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4e02312f-83a0-4083-8872-f3ab4c625a10')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Action Denied by SCP-Medium",
+                "description": "This query detects when an entity attempts to take an action that is being denied by the Service Control Policy we have in place.\n\nHandling guidance: Review what actions the originating principal has done and confirm with the user of the activtiy and the justification of attempting to use those actions. If the activity is a true positive, look into incident response actions. Refer to the existing SCPs: https://tfs.prd.costargroup.com/infra/AWS/_git/aws-service-control-policies?path=%2Fpublish%2Fsrc%2Fpolicies.tf",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Author: Shihab Nouh\r\n//Source:  https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html\r\n//Reviewer: Almahdi Sahad\r\n//Description: This query detects when an entity attempts to take an action that is being denied by the Service Control Policy we have in place.\r\n//Handling guidance: Review what actions the originating principal has done and confirm with the user of the activtiy and the justification of attempting to use those actions. If the activity is a true positive, look into incident response actions. Refer to the existing SCPs: https://tfs.prd.costargroup.com/infra/AWS/_git/aws-service-control-policies?path=%2Fpublish%2Fsrc%2Fpolicies.tf\r\n//2024-02-20: Update by asahad to add EventSource and UserAgent fields to be projected/returned by query\r\n//2024-10-02: Update by Sufian to restrict alerting to Creating, Deleting, Modifying Objects, and Terminating/Running instances. Added If clause to make prd events Medium and sbx/dev events Low\r\nAWSCloudTrail\r\n| where ErrorMessage has \"service control policy\"\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| where EventName in (\r\n    \"CreateUser\", \"DeleteUser\", \"AttachUserPolicy\", \"DetachUserPolicy\",\r\n    \"CreateRole\", \"DeleteRole\", \"AttachRolePolicy\", \"DetachRolePolicy\",\r\n    \"CreatePolicy\", \"DeletePolicy\",\r\n    \"RunInstances\", \"TerminateInstances\",\r\n    \"CreateBucket\", \"DeleteBucket\", \"PutBucketPolicy\", \"DeleteBucketPolicy\",\r\n    \"PutObject\", \"DeleteObject\",\r\n    \"CreateDBInstance\", \"DeleteDBInstance\", \"ModifyDBInstance\",\r\n    \"CreateFunction\", \"DeleteFunction\", \"UpdateFunctionConfiguration\",\r\n    \"CreateLogGroup\", \"DeleteLogGroup\", \"PutRetentionPolicy\",\r\n    \"StartInstances\", \"StopInstances\", \"RebootInstances\",\r\n    \"CreateVPNConnection\", \"DeleteVPNConnection\",\r\n    \"CreateSnapshot\", \"DeleteSnapshot\",\r\n    \"PutAccountPublicAccessBlock\", \"DeleteAccountPublicAccessBlock\",\r\n    \"CreateSecurityGroup\", \"DeleteSecurityGroup\", \"AuthorizeSecurityGroupIngress\", \"RevokeSecurityGroupIngress\", \"ModifyDBClusterSnapshotAttribute\", \"ec2:ModifySnapshotAttribute\", \"rds:ModifyDBClusterSnapshotAttribute\" \r\n) // List of API calls of interest\r\n| extend Severity = iff(SessionIssuerUserName has \"prd\", \"Medium\", \"Low\") // Determine severity\r\n| project\r\n    TimeGenerated,\r\n    EventSource,\r\n    EventName,\r\n    RequestParameters,\r\n    ResponseElements,\r\n    ErrorCode,\r\n    SourceIpAddress,\r\n    UserIdentity,\r\n    UserIdentityArn,\r\n    SessionIssuerUserName,\r\n    UserAgent,\r\n    arn,\r\n    AccountName = name,\r\n    ErrorMessage, \r\n    Severity",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Reconnaissance",
+                    "Discovery"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertSeverityColumnName": "Severity",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "UserIdentityArn": "UserIdentityArn"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

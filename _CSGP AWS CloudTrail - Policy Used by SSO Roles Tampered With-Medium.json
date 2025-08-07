@@ -1,0 +1,82 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b6cb904d-19b3-4be5-bfe2-e84cf00842c2')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b6cb904d-19b3-4be5-bfe2-e84cf00842c2')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Policy Used by SSO Roles Tampered With-Medium",
+                "description": "Detects when a change is made to the policies used by the SSO roles with the CSGPBuildAgentRole but not with Cloudformation\n\nHandling guidance: Based on the target account, identify the user who made the change and request immediate rollback. Re-running SecOpsCore will not fix the issue.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Contributor: Lionel Brosson\r\n//Reviewer: Jeremy Kesterson\r\n//Reference: \r\n//Description: Detects when a change is made to the policies used by the SSO roles with the CSGPBuildAgentRole but not with Cloudformation\r\n//Handling guidance: Based on the target account, identify the user who made the change and request immediate rollback. Re-running SecOpsCore will not fix the issue.\r\n//\r\n// Change notes\r\n// ------------\r\n// 03/17/25 jkim2 - Excluding terraform provisioned activity - we should ignore actions on a separate build than \"secopscore\"\r\nAWSCloudTrail\t\r\n| where dynamic(['CreatePolicyVersion', 'AttachRolePolicy', 'PutRolePolicy']) has EventName\t\r\n| where ErrorCode <> \"AccessDenied\"\r\n| where UserAgent <> \"cloudformation.amazonaws.com\"\r\n| where SessionIssuerUserName == \"CSGPBuildAgentRole\"\r\n| where UserAgent !has \"Terraform\" and UserAgent !has \"HashiCorp\" and UserAgent !has \"terraform-provider-aws\"\r\n| where parse_json(RequestParameters).policyArn contains \"secops-aws\" or parse_json(RequestParameters).roleName matches regex \"aws_.*_[secops|systems|security|network|dba|devops|developers]\"\r\n| extend Event_ = EventName\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| project TimeGenerated, Event_, SessionIssuerArn, RequestParameters, UserIdentityArn, AWSRegion, AccountName, accountid, SourceIpAddress",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "UserIdentityArn": "UserIdentityArn",
+                    "EventName": "Event_"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

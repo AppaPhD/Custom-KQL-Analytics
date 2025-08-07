@@ -1,0 +1,88 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d489fc13-ac57-4cb6-b56e-dabdb2377427')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d489fc13-ac57-4cb6-b56e-dabdb2377427')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Flow Logging Deleted-Medium",
+                "description": "Detects when logging is stopped or deleted for netflows. This could be used for defense evasion and is considered very infrequent and suspicious.\n//Handling guidance: Reach out to the associated user / team (if applicable) and find their use-case. Confirm with secops that this is authorized and expected.\n//Request paramers = What actor is doing.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Contributor: Shihab Nouh\r\n//Reference:  https://expel.io/blog/following-cloudtrail-generating-aws-security-signals-sumo-logic/  \r\n//Reviewer: Lucas Trainer\r\n//Description: Detects when logging is stopped or deleted for netflows. This could be used for defense evasion and is considered very infrequent and suspicious.\r\n//Handling guidance: Reach out to the associated user / team (if applicable) and find their use-case. Confirm with secops that this is authorized and expected.\r\nlet exempted_accounts = dynamic(['aws_sharedsvc_sbx', 'aws_sharedsvc_dev', 'aws_sharedsvc_tst']);\r\nAWSCloudTrail\r\n| where EventName == 'DeleteFlowLogs'\r\n//| where dynamic(['183623824359', '159360624413', '736117129292']) !contains UserIdentityAccountId\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| where not(AccountName has_any(exempted_accounts))\r\n| project\r\n    TimeGenerated,\r\n    AccountName,\r\n    EventSource,\r\n    EventName,\r\n    UserIdentityArn,\r\n    UserIdentityAccountId,\r\n    SessionIssuerUserName,\r\n    SessionIssuerArn,\r\n    SessionIssuerAccountId,\r\n    RequestParameters,\r\n    ResponseElements,\r\n    SourceIpAddress",
+                "queryFrequency": "PT10M",
+                "queryPeriod": "PT10M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "CloudApplication"
+                        ],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

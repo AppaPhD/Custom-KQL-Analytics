@@ -1,0 +1,78 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5934a785-acee-4c8b-b8c7-4f7ab0d51ca7')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5934a785-acee-4c8b-b8c7-4f7ab0d51ca7')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Atlassian ORG Admin Changes",
+                "description": "This will filter CloudAppEvents for Atlassian logs where the ActionType contains “org” and “admin,” then extracts key details.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Contributor: Kamran Ahmadjan & Wajahat Malik\r\n// Reviewer: Grover Mewborn\r\n// Reference: \r\n//\r\n// Description: This will filter CloudAppEvents for Atlassian logs where the ActionType contains “org” and “admin,” then extracts key details.\r\n// Handling Guidance: 1.Review the User's Role & Department, Verify the user’s job function and responsibilities. 2.Analyze Changes Made. What changes are made?. Is there Jira tickets available for these changes? Make sure there is a valid business reason? 3. Validate Intent. Confirm with Naomi Wantz or Paul O'Neil If this activity is expected. Rollback these changes if deemed unauthorized, this will need to be escalated to the collaboration team. Sync with Naomi Wantz or Paul O'Neil \r\n// Change Log\r\nfx_Atlassian_Parsed\r\n| where ActionType has \"org\" and ActionType has \"admin\"\r\n| extend content_ = tostring(parse_json(tostring(RawEventData.message)).content)\r\n| extend Link = tostring(parse_json(tostring(RawEventData.links)).self)\r\n| project TimeGenerated, AccountDisplayName, City, CountryCode, IPAddress, ActionType, content_, Link",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation",
+                    "Persistence"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountDisplayName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "ActionType"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

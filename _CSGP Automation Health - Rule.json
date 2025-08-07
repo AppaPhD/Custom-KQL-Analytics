@@ -1,0 +1,83 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b8f1fd15-d5c0-4234-b447-6e3c17404169')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b8f1fd15-d5c0-4234-b447-6e3c17404169')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: Automation Health - Rule",
+                "description": "This query checks for failed automation rules.\n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+                "severity": "Low",
+                "enabled": true,
+                "query": "//Contributor: Anthony Edelstein\r\n//Source: Automation Health Dashboard Gallery Content Sentinel Workbook\r\n//Description: This rule checks for any failed automation rule runs once a day.\r\n//Query:\r\nSentinelHealth\r\n| where SentinelResourceType == \"Automation rule\"\r\n| where Status == \"Failure\"\r\n| extend RuleName = extract(@':(.*)Playbook', 1, Description)\r\n| summarize FailedRuns=count(Status) by SentinelResourceName, SentinelResourceId, Description, OperationName, Reason, RuleName\r\n",
+                "queryFrequency": "PT30M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1565"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Automation Health: {{RuleName}} ",
+                    "alertDescriptionFormat": "This automation rule {{RuleName}} has failed to run {{FailedRuns}} times. \n\n\n{{Description}}",
+                    "alertDynamicProperties": [
+                        {
+                            "alertProperty": "ExtendedLinks",
+                            "value": "RuleName"
+                        }
+                    ]
+                },
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "RuleName"
+                            },
+                            {
+                                "identifier": "AppId",
+                                "columnName": "SentinelResourceId"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

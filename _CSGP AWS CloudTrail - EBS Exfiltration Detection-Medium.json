@@ -1,0 +1,87 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/73a8c774-d710-42a8-956b-cf41202c0a4d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/73a8c774-d710-42a8-956b-cf41202c0a4d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "P1D",
+        "queryPeriod": "P1D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {
+          "UserIdentityArn": "UserIdentityArn",
+          "AccountName": "AccountName",
+          "EventName": "EventName"
+        },
+        "entityMappings": [
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserIdentityArn"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "EventName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "tactics": [
+          "Exfiltration",
+          "Execution"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "displayName": "_CSGP: AWS CloudTrail - EBS Exfiltration Detection-Medium",
+        "enabled": true,
+        "description": "Detects when an identity modifies or adds specific permissions of a snapshot to allow unauthorized access from unknown entities.\n\nHandling guidance: Review the identities actions for anomalous activity and the unknown AWS account that is attached.",
+        "alertRuleTemplateName": null,
+        "query": "//Author: Shihab Nouh\n//Source:  https://docs.datadoghq.com/security/default_rules/cloudtrail-aws-ebs-snapshot-possible-exfiltration/\n//Reviewer:\n//Description: This query identifies when an identity, excluding HomeSnap, creates or modifies the permissions of a snapshot to allow unauthorized access from unknown entities.\n// A new EBS volume can be created from the snapshot and attached to an EC2 instance for analysis by an attacker\n//Handling guidance: Review the identities actions for anamolous activity and the unknown AWS account that is attached & reach out to the respected team\n//Change Log\n//01/28/2024 - Wajahat Malik - added aws_vlsharedsvc_prd as an exclusion based on AWSBackupDefaultServiceRole\nAWSCloudTrail\n| where dynamic(['ModifySnapshotAttribute', 'CopySnapshot', 'ShareSnapshot', 'ExportSnapshot']) has EventName\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\n| extend AccountName = name\n| where dynamic(['WizAccess-Role', 'AWSServiceRoleForImageBuilder', 'CSGPDivvyCloudRole', 'aws_dataservices_sbx', 'AWSDataLifecycleManagerDefaultRole', 'csgp-osrm-preprocessor-prd-us-east-1-roleb03bb34defb48d7e']) !has SessionIssuerUserName\n| where dynamic(['aws_dataservices_sbx', 'aws_dataservices_prd']) !has AccountName\n| where AccountName !has \"aws_vlsharedsvc_prd\" and SessionIssuerUserName !has \"AWSBackupDefaultServiceRole\"//VL uses AWS Backup\n| project\n    TimeGenerated,\n    AccountName,\n    EventSource,\n    EventName,\n    UserIdentityArn,\n    UserIdentityAccountId,\n    SessionIssuerUserName,\n    SessionIssuerArn,\n    SessionIssuerAccountId,\n    ErrorCode,\n    ErrorMessage,\n    RequestParameters,\n    SourceIpAddress"
+      }
+    }
+  ]
+}

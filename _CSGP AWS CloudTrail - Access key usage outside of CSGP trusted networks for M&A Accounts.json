@@ -1,0 +1,103 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/723616bd-8191-44e7-99b1-311d92bb29de')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/723616bd-8191-44e7-99b1-311d92bb29de')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: AWS CloudTrail - Access key usage outside of CSGP trusted networks for M&A Accounts",
+        "description": "Access key usage outside of CSGP trusted networks based on trusted IP watchlist and other third-party known usage.  Access Keys are long-lived credentials for IAM users (service accounts) in aws.  They should only be used from trusted sources.  Hits from this rule can be an IOC.\n\nHandling guidance: Investigate activity from the key usage (actions taken, user-agents, IPs, etc.) If true positive, initiate runbook: https://wiki.costargroup.com/x/No6nMw.  If activity is benign or from a trusted host, it can be added as exclusion with a peer review from a teammate.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "//Contributor: Jack Warner, Almahdi Sahad, Shihab Nouh, Matt Moschetta \n//Reference: N/A\n//Description: Access key usage outside of CSGP trusted networks based on trusted IP watchlist and other third-party known usage.  Access Keys are long-lived credentials for IAM users (service accounts) in aws.  They should only be used from trusted sources.  Hits from this rule can be an IOC.\n//Handling guidance: Investigate activity from the key usage (actions taken, user-agents, IPs, etc.) If true positive, initiate runbook: https://wiki.costargroup.com/x/No6nMw.  If activity is benign or from a trusted host, it can be added as exclusion with a peer review from a teammate.\n//Change Log\n//10/29/2024 - Wajahat Malik - Excluded OTM from the alert logic, added AWS IP range watchlist and removed repeated exclusions\n//11/26/2024 - Wajahat Malik - Exlcuded Zscaler IPs for the User ARN \"arn:aws:iam::560612935093:user/homesnap-s3-upload\"\n//5/29/2025 - Adrian Shina - Fixed a syntax error, cleaned up code, and added exclusions for VL.\n//6/20/2025 - Adrian Shina - exclude SecOps Secret Scanning UserAgent\nlet Costar_Public_IPs = (\n    _GetWatchlist('Costar_Public_IP_Ranges')\n    | project SearchKey\n    | summarize make_list(SearchKey)\n    );\nlet AWS_Public_IPs = (\n    _GetWatchlist('Costar_AWS_NAT_Gateways')\n    | project SearchKey\n    | summarize make_list(SearchKey)\n    );\nlet Zscaler_Public_IPs = (\n    _GetWatchlist('Zscaler_Public_IP_Ranges')\n    | project SearchKey\n    | summarize make_list(SearchKey)\n    );\nlet acquisition_accounts = (\n    _GetWatchlist(\"acquisition_accounts\")\n    | project SearchKey\n    | summarize make_list(SearchKey)\n    );\n//Ip list created using https://whatismyipaddress.com/ip/ along with wiz & divvycloud\nlet hsmain_BuildServer_MicrosoftCorporationIPs = dynamic(\n    //homesnap team leverages managed github runners which are dynamic IPs managed by microsoft see link below:\n    //https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-githubs-ip-addresses\n    [\"104.210.0.0/16\",\n    \"162.237.0.0/16\"\n    \"104.209.0.0/16\",\n    \"104.45.0.0/16\",\n    \"13.66.0.0/16\",\n    \"13.86.0.0/12 \",\n    \"172.177.0.0/15\",\n    \"20.0.0.0/8 \",\n    \"4.156.0.0/13\",\n    \"4.236.0.0/16\",\n    \"40.80.0.0/11\",\n    \"52.0.0.0/16 \",\n    \"52.235.0.0/11\",\n    \"13.65.0.0/12\",\n    \"138.91.0.0/16\",\n    \"23.98.137.107\",\n    \"40.120.0.0/13\",\n    \"52.156.0.0/16\",\n    \"52.173.0.0/11\",\n    \"52.190.14.167\",\n    \"70.37.167.44\",\n    \"23.98.0.0/16\"\n    ]\n    );\nlet attachments_transferservice_GoogleIPs = dynamic( //attachments handler does have a sync to a storage account in a GCP project.  These access keys are used for that replication.\n    [\"142.250.216.0/24\",\n    \"74.125.38.0/24\"\n    ]\n    );\nlet excluded_acquisition_accounts = dynamic([\"otm\", \"otmsoftware\", \"legacyotm\", \"vl\", \"vlcorp\", \"vlsharedsvc\"]);\nAWSCloudTrail\n| where UserIdentityAccessKeyId startswith \"AKIA\"\n| where not(ipv4_is_in_any_range(SourceIpAddress, toscalar(Costar_Public_IPs)) and ipv4_is_in_any_range(SourceIpAddress, toscalar(AWS_Public_IPs)))\n| where not(ipv4_is_in_any_range(SourceIpAddress, toscalar(Zscaler_Public_IPs)) and UserIdentityArn == \"arn:aws:iam::560612935093:user/homesnap-s3-upload\")\n| where not(ipv4_is_in_any_range(SourceIpAddress, hsmain_BuildServer_MicrosoftCorporationIPs) and UserIdentityArn == \"arn:aws:iam::560612935093:user/build-server\")\n| where not(ipv4_is_in_any_range(SourceIpAddress, attachments_transferservice_GoogleIPs) and UserIdentityArn == \"arn:aws:iam::784884843285:user/api-transferservice-prd\")\n| where not(ipv4_is_in_any_range(SourceIpAddress, \"10.10.0.0/16\") and (UserIdentityArn == \"arn:aws:iam::560612935093:user/aws-lambda\" or UserIdentityArn == \"arn:aws:iam::560612935093:user/homesnap-s3-upload\"))//hsmain vpc range\n| where not(ipv4_is_in_any_range(SourceIpAddress, \"20.190.0.0/16\") and UserIdentityArn == \"arn:aws:iam::714246684019:user/AzureADRoleManager\")//legacyotm_microsoftIPs\n| where UserAgent !contains \"csgp-secops-repo-scanning\" // exclude SecOps Secret Scanning\n| summarize count() by SourceIpAddress, UserIdentityAccountId, UserIdentityArn, UserAgent\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\n| where name in(acquisition_accounts) and not(name has_any(excluded_acquisition_accounts))\n| distinct SourceIpAddress, name, count_, UserIdentityArn, UserAgent",
+        "queryFrequency": "PT10M",
+        "queryPeriod": "PT10M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "InitialAccess",
+          "Persistence",
+          "PrivilegeEscalation",
+          "CredentialAccess"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {
+          "UserIdentityArn": "UserIdentityArn",
+          "SourceIpAddress": "SourceIpAddress"
+        },
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "name"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserIdentityArn"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserAgent"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

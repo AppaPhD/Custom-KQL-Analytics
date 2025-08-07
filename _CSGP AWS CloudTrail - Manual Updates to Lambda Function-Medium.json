@@ -1,0 +1,84 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/3cda0543-0175-4a0f-b793-9253bef43860')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/3cda0543-0175-4a0f-b793-9253bef43860')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Manual Updates to Lambda Function-Medium",
+                "description": "Detects when lambda function code is updated, or when a IAM principal is granted the ability to use a function. This could be used for defense evasion/priv escalation.\n\nHandling guidance: Please review the function code and the permissions granted to the IAM principals allowed to use the function/that the function can use.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Contributor: Jeremy Kesterson\r\n//Reference:\r\n//Reviewer:\r\n//Description: Detects when lambda function code is updated, or when a IAM principal is granted the ability to use a function. This could be used for defense evasion/priv escalation.\r\n//Handling guidance: Please review the function code and the permissions granted to the IAM principals allowed to use the function/that the function can use.\r\n//Request paramers = What actor is doing.\r\n//Sufian Tanveer: 10/1/2024 - Parsed Request/Response Parameters for readability and tuned out events. Reenabled to generate incidents\r\nlet exclusions = dynamic([\"otm\"]);\r\nAWSCloudTrail\r\n| where EventName startswith 'AddPermission' or EventName == 'UpdateFunctionCode'\r\n| where UserIdentityArn !contains \"CSGPBuildAgentRole\"\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| where AccountName has \"prd\"\r\n| where not (AccountName has_any (exclusions))\r\n| extend x = parse_json(RequestParameters)\r\n| extend FunctionName = x.[\"functionName\"]\r\n| extend sourceARN = x.[\"sourceArn\"]\r\n| where UserIdentityAccountId !has \"560612935093\"\r\n| project\r\n    TimeGenerated,\r\n    AWSRegion,\r\n    SourceIpAddress,\r\n    AccountName,\r\n    EventName,\r\n    UserIdentityArn,\r\n    FunctionName,\r\n    sourceARN,\r\n    UserIdentityAccountId\r\n| where AccountName !contains 'sbx'\r\n    and AccountName !contains 'Guy Wolcott'\r\n    and AccountName !contains 'realla'",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1550"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "AccountName": "AccountName",
+                    "UserIdentityArn": "UserIdentityArn",
+                    "EventName": "EventName"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

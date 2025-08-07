@@ -1,0 +1,96 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ac3dbed5-dc0d-455a-8893-15c3670ed517')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ac3dbed5-dc0d-455a-8893-15c3670ed517')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Remote SSM Document Executed-High",
+                "description": "\"AWS-RunDocument\" allows for the run of AWS Systems Manager (SSM) documents from remote locations.\n\nHandling Guidance: An attacker could run remote documents on the instance. Attempt to find the SSM Document being executed and find the source of the identity attempting to run commands.",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Shihab Nouh\r\n//Source: https://docs.aws.amazon.com/systems-manager/latest/userguide/documents-running-remote-github-s3.html\r\n//Reviewer: \r\n//Description: Detects when AWS-RunDocument SSM Document is run. \"AWS-RunDocument\" allows for the run of AWS Systems Manager (SSM) documents from remote locations.\r\n//Handling Guidance: An  attacker could run remote documents on the instance. Attempt to find the SSM Document being executed and find the source of the identity attempting to run commands.\r\nAWSCloudTrail\r\n| where EventSource contains \"ssm\"\r\n| extend documentName_ = tostring(parse_json(RequestParameters).documentName)\r\n| where documentName_ == \"AWS-RunDocument\"\r\n| join kind=leftouter _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| project AccountName, UserIdentityArn, EventName, SourceIpAddress",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution",
+                    "Exfiltration"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

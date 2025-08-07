@@ -1,0 +1,95 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/92d99634-b254-4b4c-af80-3a3f0c6d4e86')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/92d99634-b254-4b4c-af80-3a3f0c6d4e86')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Denied Create/Delete User-Low",
+                "description": "Detects when a principal fails to create/delete an IAM user. Could be indicative of attempted privilege escalation. \n\nHandling guidance: Reach out to user and let them know manual IAM user actions are not permitted, use the build agents. If combined with other alerts from the same user, escalate to secops.\nNote: In an sbx environment the IAM would be managed there and not managed by an agent.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  \r\n//Reviewer: Mohamed Elgendy, James Kim\r\n//Description: Detects when a principal fails to create/delete an IAM user. Could be indicative of attempted privilege escalation.\r\n//Handling guidance: Reach out to user and let them know manual IAM user actions are not permitted, use the build agents. If combined with other alerts from the same user, escalate to secops.\r\nAWSCloudTrail\r\n| where (EventName has 'CreateUser' or EventName has 'DeleteUser') and ErrorCode has 'AccessDenied'\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| project TimeGenerated, UserIdentity, AccountName, EventName, UserIdentityArn, ErrorCode, ErrorMessage\r\n| extend ReadableTime = format_datetime(TimeGenerated, 'yyyy-MM-dd HH:mm')\r\n| extend ReachOutMessage = strcat(\"Alert: Our logs indicated that the action \", EventName, \" was initiated by the principal \", UserIdentity, \" on \", ReadableTime, \" in the account \", AccountName, \". Manual IAM actions are not permitted as is it impacts our security posture. As a best practice, we encourage the use of build agents for any IAM modifications. This approach not only automates processes but also ensures that changes are logged, version-controlled, and aligned with our organization’s security policies. Please confirm that this activity was intended by you.\");",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation",
+                    "InitialAccess",
+                    "CredentialAccess",
+                    "LateralMovement"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT4H",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "AWS Cloudtrail - Manual IAM User Actions: {{EventName}}, {{ErrorCode}}",
+                    "alertDescriptionFormat": "UserIdentityArn: {{UserIdentityArn}}\n\nError Message: {{ErrorMessage}}\n\n📖Description: Detects when a principal fails to create/delete an IAM user. Could be indicative of attempted privilege escalation.\n\n🔎Handling guidance: Reach out to user and let them know manual IAM user actions are not permitted, use the build agents. If combined with other alerts from the same user, escalate to SecOps.\nNote: in sbx environment the IAM would be managed there and not managed by an agent.\n\n📣Reach Out Message: {{ReachOutMessage}}  \n",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "ErrorMessage": "ErrorMessage"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

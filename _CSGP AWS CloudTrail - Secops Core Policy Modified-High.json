@@ -1,0 +1,96 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/eb2abaa0-c0b5-46f9-b856-3af4693c3a01')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/eb2abaa0-c0b5-46f9-b856-3af4693c3a01')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Secops Core Policy Modified-High",
+                "description": "This query identifies any 'SSORoles' (employee assumed roles for AWS access), that have had a policy modified. This should ONLY be done by the BuildAgentRole and never by any other identity.\n\nHandling guidance: Identify the modified policy, and identity that took this action. Review what access is granted by this policy in divvycloud, and compare with what is in secops core to find the differences. Reach out to secops to remediate.",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  NA\r\n//Reviewer:\r\n//Description: This query identifies any 'SSORoles' (employee assumed roles for AWS access), that have had a policy modified. This should ONLY be done by the BuildAgentRole and never by any other identity.\r\n//Handling guidance: Identify the modified policy, and identity that took this action. Review what access is granted by this policy in divvycloud, and compare with what is in secops core to find the differences. Reach out to secops to remediate.\r\n//\r\nAWSCloudTrail\r\n| where dynamic(['CreatePolicyVersion', 'SetDefaultPolicyVersion']) has EventName\r\n| extend UserIdentity = split(UserIdentityArn, '/')[1]\r\n| where UserIdentity != 'CSGPBuildAgentRole'\r\n| extend RequestParamsJson = parse_json(RequestParameters)\r\n| extend ModifiedPolicy = RequestParamsJson.policyArn\r\n| where split(ModifiedPolicy, '/')[1] startswith 'secops-aws-'\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| where name != 'aws_realla_prd'\r\n| project TimeGenerated, EventName, SessionIssuerArn, RequestParameters, UserIdentity, ModifiedPolicy, AccountName, accountid",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "LateralMovement",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "ModifiedPolicy"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

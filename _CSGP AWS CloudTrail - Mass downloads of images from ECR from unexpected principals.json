@@ -1,0 +1,83 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4f7884a9-7439-4e92-947d-584e6373aa66')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4f7884a9-7439-4e92-947d-584e6373aa66')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Mass downloads of images from ECR from unexpected principals",
+                "description": "Contributor(s): Nixy Camacho, Kamran Ahmadjan, Wajahat Malik\nReference: https://servicedesk.costargroup.com/browse/SEC-11667\nHandling Guidance: \n- Reach out to the principal / user performing downloads (if applicable)\n- Confirm with SecOps if an entity is seen performing this to ensure this is normal/expected activity.\n- Investigate: Are there any other detections / correlated events that this same user principal triggered around the same time? Is the principal a real human user, or automated service account?",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "AWSCloudTrail\r\n// | where TimeGenerated >= ago(30d) //uncomment for testing rule hits in last 30d\r\n| where EventSource == \"ecr.amazonaws.com\"\r\n| where EventName == \"GetDownloadUrlForLayer\" //or EventName == \"BatchCheckLayerAvailability\"\r\n| where isnotempty(UserIdentityArn)\r\n| where UserIdentityArn startswith \"arn:aws:iam\" // This shouldn't be done with a IAM user \r\n| where UserIdentityArn !in (\"arn:aws:iam::103567893073:user/travis\", \"arn:aws:iam::614253799013:user/m2repo-s3\", \"arn:aws:iam::103567893073:user/jenkins-ecr\")\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| summarize GetDownloadUrlForLayer_Count = countif(EventName == \"GetDownloadUrlForLayer\"), TotalDownloads = count() by name, UserIdentityArn, SourceIpAddress, UserAgent\r\n| where TotalDownloads > 2\r\n| project-rename Subscription = name, UserIdentityArn, SourceIpAddress, GetDownloadUrlForLayer_Count, TotalDownloads, UserAgent",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1567"
+                ],
+                "subTechniques": [
+                    "T1567.001"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT6H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Subscription"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

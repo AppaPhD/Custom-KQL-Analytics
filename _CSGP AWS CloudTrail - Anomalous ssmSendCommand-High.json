@@ -1,0 +1,101 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/574eed6c-f03c-432b-9a2b-30a73c66a169')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/574eed6c-f03c-432b-9a2b-30a73c66a169')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Anomalous ssm:SendCommand-High",
+                "description": "Detects when an identity from outside of our AWS organization executes the ssm:SendCommand action.\n\nHandling Guidance: An attacker could run shell commands on the instance. Review what commands were run in the Request Parameters and whether the action were successful by looking through the Response Elements.",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Shihab Nouh\r\n//Source: https://attack.mitre.org/techniques/T1651/\r\n//Reviewer: jkesterson, jkim2\r\n//Description: Detects when an identity from outside of our AWS organization executes the ssm:SendCommand action.\r\n//Handling Guidance: An attacker could run shell commands on the instance. Review what commands were run in the Request Parameters and whether the action were successful by looking through the Response Elements.\r\nAWSCloudTrail\r\n| where EventName == 'SendCommand'\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| where arn !has 'o-jzy0ozy1j9'\r\n| extend AccountName = name\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| project AccountName, UserIdentity, UserIdentityArn, UserIdentityInvokedBy, EventName, SourceIpAddress, RequestParameters, ResponseElements",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Reconnaissance",
+                    "InitialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "UserIdentityArn": "UserIdentityArn",
+                    "EventName": "EventName"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "UserIdentityInvokedBy"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

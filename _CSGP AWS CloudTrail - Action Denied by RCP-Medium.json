@@ -1,0 +1,91 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b07df7d5-0a86-47dd-8170-5acfc8c873ac')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b07df7d5-0a86-47dd-8170-5acfc8c873ac')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: AWS CloudTrail - Action Denied by RCP-Medium",
+        "description": "Reference: https://costar-group-prod-dev.atlassian.net/browse/SEC-14643\n\nDescription: This query detects when an entity attempts to take an action that is being denied by the Resource Control Policy we have in place. View the existing RCPs that SecOps has in place here: https://tfs.prd.costargroup.com/CoStarCollection/CSGP%20SecOps/_git/aws-organization-policies?path=/modules/resource-control-policies/rcp-policy-documents.tf \n\nHandling Guidance: Check the user principal ARN and the resource that was attempted to be accessed. Work with SecOps or any involved parties to determine if any further steps are needed, or if the block/controls we have in place were sufficient. Be on the lookout for other correlated incidents/events surrounding this activity",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "AWSCloudTrail\n| where ErrorMessage has \"resource control policy\"\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\n| extend Severity = iff(SessionIssuerUserName has \"prd\", \"Medium\", \"Low\") // Determine severity\n| project\n    TimeGenerated,\n    EventSource,\n    EventName,\n    RequestParameters,\n    ResponseElements,\n    ErrorCode,\n    SourceIpAddress,\n    UserIdentity,\n    UserIdentityArn,\n    SessionIssuerUserName,\n    UserAgent,\n    arn,\n    AccountName = name,\n    ErrorMessage, \n    Severity",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "Reconnaissance",
+          "Discovery"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {
+          "UserIdentityArn": "UserIdentityArn"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserIdentity"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "EventName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

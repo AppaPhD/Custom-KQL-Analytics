@@ -1,0 +1,102 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/2fd10b87-89b0-4751-96ca-79ba141e8235')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/2fd10b87-89b0-4751-96ca-79ba141e8235')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Access key usage outside of CSGP trusted networks for non M&A accounts",
+                "description": "Access key usage outside of CSGP trusted networks based on trusted IP watchlist and other third-party known usage.  Access Keys are long-lived credentials for IAM users (service accounts) in aws.  They should only be used from trusted sources.  Hits from this rule can be an IOC.\n\nHandling guidance: Investigate activity from the key usage (actions taken, user-agents, IPs, etc.) If true positive, initiate runbook: https://wiki.costargroup.com/x/No6nMw.  If activity is benign or from a trusted host, it can be added as exclusion with a peer review from a teammate.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Contributor: Jack Warner, Almahdi Sahad, Shihab Nouh, Matt Moschetta, Vivian Tran, Lucas Trainer\r\n//Reference: N/A\r\n//Description: Access key usage outside of CSGP trusted networks based on trusted IP watchlist and other third-party known usage.  Access Keys are long-lived credentials for IAM users (service accounts) in aws.  They should only be used from trusted sources.  Hits from this rule can be an IOC.\r\n//Handling guidance: Investigate activity from the key usage (actions taken, user-agents, IPs, etc.) If true positive, initiate runbook: https://wiki.costargroup.com/x/No6nMw.  If activity is benign or from a trusted host, it can be added as exclusion with a peer review from a teammate.\r\n//Change log:\r\n//10/23/2024 - Wajahat Malik - Added Trusted AWS IPs as exclusions. Also, fixed alert logic and removed hardcoded lookback time.\r\n//01/17/2024 - Wajahat Malik - Added tenx_imageservice_GoogleIPs exclusion\r\n//04/14/2025 - Nixy Camacho - Added exclusion for \"boto3/csgp-secops-repo-scanning\" UserAgent that is used when Eric Pickard is testing repo scanning locally on his laptop\r\nlet Costar_Public_IPs = ( //Trust Costar IPs\r\n    _GetWatchlist('Costar_Public_IP_Ranges')\r\n    | project SearchKey\r\n    | summarize make_list(SearchKey)\r\n    );\r\nlet AWS_Public_IPs = ( //AWS trusted IPs\r\n    _GetWatchlist('Costar_AWS_NAT_Gateways')\r\n    | project SearchKey\r\n    | summarize make_list(SearchKey)\r\n    );\r\nlet acquisition_accounts = (// acquisition account watchlist used for acquisition account exclusion\r\n    _GetWatchlist(\"acquisition_accounts\")\r\n    | project SearchKey\r\n    | summarize make_list(SearchKey)\r\n    );\r\nlet attachments_transferservice_GoogleIPs = dynamic( //attachments handler does have a sync to a storage account in a GCP project.  These access keys are used for that replication.\r\n    [\"142.250.216.0/24\",\r\n    \"74.125.38.0/24\"\r\n    ]\r\n    );\r\nlet tenx_imageservice_GoogleIPs = dynamic( //tenx workload that utilizes a 3rd-party service(called imgix) that fetches images from our S3 buckets to serve for our websites. It uses Access keys to authenticate when fetching from S3.\r\n    [\"34.28.7.175/32\",\r\n    \"34.28.29.135/32\",\r\n    \"34.29.65.36/32\",\r\n    \"34.30.205.36/32\",\r\n    \"34.85.63.40/32\",\r\n    \"34.146.208.18/32\",\r\n    \"35.187.199.182/32\",\r\n    \"35.200.29.1/32\",\r\n    \"35.200.53.97/32\",\r\n    \"35.224.255.174/32\",\r\n    \"35.226.32.154/32\",\r\n    \"104.129.144.0/22\",\r\n    \"104.198.92.239/32\",\r\n    \"194.38.4.0/22\",\r\n    \"34.91.38.207/32\",\r\n    \"34.34.97.80/32\",\r\n    \"34.32.156.249/32\",\r\n    \"35.204.35.219/32\",\r\n    \"34.91.100.172/32\",\r\n    \"34.32.141.39/32\"\r\n    ]\r\n    );\r\nAWSCloudTrail\r\n| where UserIdentityAccessKeyId startswith \"AKIA\" //Filter to Access keys\r\n| where UserIdentityUserName !has \"svc-axonius-adapter-prd\"\r\n| where not(ipv4_is_in_any_range(SourceIpAddress, toscalar(Costar_Public_IPs)))\r\n| where not(ipv4_is_in_any_range(SourceIpAddress, toscalar(AWS_Public_IPs))) //Exclude CoStar Public IPs\r\n| where not(ipv4_is_in_any_range(SourceIpAddress, attachments_transferservice_GoogleIPs) and UserIdentityArn == \"arn:aws:iam::784884843285:user/api-transferservice-prd\")//attachments handler does have a sync to a storage account. These keys are used for that replication.\r\n| where not(ipv4_is_in_any_range(SourceIpAddress, tenx_imageservice_GoogleIPs) and UserIdentityArn == \"arn:aws:iam::725827017996:user/tenx-prd-imgix-s3-svc-acct\")//tenx workload that utilizes a 3rd-party service(called imgix) that fetches images from our S3 bucket to serve for our websites. It uses Access keys to authenticate when fetching from S3.There might still be some other IPs using this User Identity to access keys because they do validation tests when they update the IAM access keys from random IPs. Please reach out to Dominick Nguyen from Tenx in this case to confirm the activity.\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| where name !in(acquisition_accounts) //exclude acquisition accounts\r\n| summarize make_set(EventName), make_set(SourceIpAddress), make_set(UserAgent, 50), EventCount=count() by UserIdentityAccessKeyId, UserIdentityAccountId, UserIdentityArn, email, ErrorCode, name\r\n| extend countEventName = array_length(set_EventName)\r\n| where set_UserAgent !has \"boto3/csgp-secops-repo-scanning\" // Added by Nixy 4/14/25",
+                "queryFrequency": "PT30M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Persistence",
+                    "PrivilegeEscalation",
+                    "CredentialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "UserIdentityArn": "UserIdentityArn"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "AzureResource",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ResourceId",
+                                "columnName": "UserIdentityAccessKeyId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "set_SourceIpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "email"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

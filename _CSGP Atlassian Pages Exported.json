@@ -1,0 +1,95 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/01c993f0-97b7-4435-badb-30a1322abc63')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/01c993f0-97b7-4435-badb-30a1322abc63')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: Atlassian Pages Exported",
+        "description": "This query will identify pages exported from confluence/JIRA. Currently using a static baseline to check for anomalous behavior",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "// Contributor: Kamran Ahmadjan & Wajahat Malik\n// Reviewer: Grover Mewborn, Samuel Liu\n// Reference: \n//\n// Description: This query will identify pages exported from confluence/JIRA.\n// Handling Guidance: 1. Review the User's Role & Department. Verify the user\u2019s job function and responsibilities. 2.Analyze Exported Pages. Gather evidence on which pages were exported. Assess whether the exported content aligns with the user\u2019s role and department. 3. Validate Intent. If the exported pages appear unrelated to the user's job responsibilities, reach out to the user to confirm the activity. Also, look to see if any files were sent out of ORG \n// Change Log\n// sliu - cut out redundant table join, parsed out actual title of page instead of the raw message data, added time constraint, added identityinfo reference for more information about the actor\n// sliu - added time bins to check for high export rate in small time\nfx_Atlassian_Parsed\n| where TimeGenerated > ago(1d)\n| where ActionType !startswith \"JIRA\"\n    and AccountDisplayName !in (\"Atlassian Internal System\", \"Identity Provider\", \"confluence\")\n    and ActionType in (\"CONFLUENCE EXPORT PAGE FINISHED\")\n| extend AccountUPN = tostring(RawEventData.attributes.actor.email)\n// add more specific detection logic here:\n// ideas: 1. check origin of the export action using ip (zscaler is most likely safe since we use it and its a trusted security company) unless this is specifically looking for insider threats, 2. actual exfiltration is probably programmatic, which means there would be an inhuman amount of exports within a small time frame (like 10m).\n| extend PageTitle = coalesce(extract(\"Completed Word export of Confluence page\\\\s+(.+)\", 1, tostring(RawEventData.message.content)),\n                              extract(\"Completed PDF export of Confluence page\\\\s+(.+)\", 1, tostring(RawEventData.message.content)))\n| summarize Pages = make_set(PageTitle), Count = count() by AccountDisplayName, AccountUPN, bin(TimeGenerated, 30m)\n| join IdentityInfo_ref on AccountUPN\n| order by Count\n| project-away AccountUPN1, AccountDisplayName1\n| where Count > 5",
+        "queryFrequency": "PT5H",
+        "queryPeriod": "PT5H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "Exfiltration"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {
+          "Department": "Department",
+          "JobTitle": "JobTitle"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountDisplayName"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "Pages"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "JobTitle"
+              },
+              {
+                "identifier": "DisplayName",
+                "columnName": "JobTitle"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

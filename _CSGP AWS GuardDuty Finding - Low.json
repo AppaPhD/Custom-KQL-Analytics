@@ -1,0 +1,126 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f32c7aed-9718-453a-8fdf-cdafa84e19b4')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f32c7aed-9718-453a-8fdf-cdafa84e19b4')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS GuardDuty Finding - Low",
+                "description": "Detects when a low guardduty alert has fired. This is considered low risk and may indicate a compromise/breach.\n\nHandling Guidance: Review payload and extended details in either the affected account, or in aws_security_prd. Use additional resources such as CloudTrail, Detective, etc.  Reach out to secops for any questions. Investigation tips/procedures: https://wiki.costargroup.com/display/SCSP/AWS+GuardDuty+IR+Guide\n\n\nInvestigation tips/procedures: https://wiki.costargroup.com/display/CSSO/Incident+Investigation+-+AWS+GuardDuty (Incident response procedures can be found underneath the investigation page)",
+                "severity": "Low",
+                "enabled": true,
+                "query": "//Author: Lucas Trainer\r\n//\r\n//Last Edited:\r\n//\r\n//Reviewer:\r\n//\r\n//Description: Detects when a low guardduty alert has fired. \r\n//\r\n//Handling Guidance: Review payload and extended details in either the affected account, or in aws_security_prd. Use additional resources such as CloudTrail, Detective, etc.  Reach out to secops for any questions. Investigation tips/procedures: https://wiki.costargroup.com/display/CSSO/Incident+Investigation+-+AWS+GuardDuty (Incident response procedures can be found underneath the investigation page)\r\n//\r\nAWSGuardDuty_Base\r\n| where Severity has \"Low\"\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.AccountId == $right.accountid\r\n| extend \r\n    BucketName_ = tostring(parse_json(tostring(ResourceDetails.s3BucketDetails))[0].name),\r\n    principalId_ = tostring(parse_json(tostring(ResourceDetails.accessKeyDetails)).principalId),\r\n    unusualbehavior_ = tostring(parse_json(tostring(parse_json(tostring(ServiceDetails.additionalInfo)).unusualBehavior)))\r\n| extend sample_ = tostring(parse_json(tostring(ServiceDetails.additionalInfo))['sample'])\r\n| extend Testing_ = iff((sample_ has \"true\"), \"Yes\", \"No\")\r\n| extend Description_ = strcat(\r\n                            Title,\r\n                            \"\\n\",\r\n                            \"\\n\",\r\n                            \"Description: \",\r\n                            \"\\n\",\r\n                            Description,\r\n                            \"\\n\"\r\n                        )",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution",
+                    "Persistence",
+                    "PrivilegeEscalation",
+                    "DefenseEvasion",
+                    "CredentialAccess",
+                    "Discovery",
+                    "LateralMovement",
+                    "CommandAndControl"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "CloudApplication"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "GuardDuty - {{ActivityType}}: {{BucketName_}}",
+                    "alertDescriptionFormat": "Description: {{{Description}} \n\nInvestigation tips/procedures: https://wiki.costargroup.com/display/CSSO/Incident+Investigation+-+AWS+GuardDuty (Incident response procedures can be found underneath the investigation page)",
+                    "alertSeverityColumnName": "Severity",
+                    "alertDynamicProperties": [
+                        {
+                            "alertProperty": "AlertLink",
+                            "value": "FindingLink"
+                        },
+                        {
+                            "alertProperty": "ProductComponentName",
+                            "value": "AWSService"
+                        }
+                    ]
+                },
+                "customDetails": {
+                    "RequestUri": "RequestUri",
+                    "Namespace": "Namespace",
+                    "ActionType": "ActionType",
+                    "Operator": "AccountName",
+                    "S3BucketName": "BucketName_"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AppId",
+                                "columnName": "BucketName_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "principalId_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "name"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "RemoteIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

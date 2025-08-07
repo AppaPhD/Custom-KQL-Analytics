@@ -1,0 +1,89 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/de2f2091-42ae-4110-b5d2-d865ff4213d3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/de2f2091-42ae-4110-b5d2-d865ff4213d3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Cognito User Actions-High",
+                "description": "AWS CloudTrail - This query identifies users authenticated through AWS Cognito attempting actions in our organization. Amazon Cognito can add user sign-up and sign-in features and control access to web and mobile applications. This could indicate identity compromise as these actions should never be seen in our organization.\n\nHandling guidance: Any triggers of this should be treated as an incident. An non-employee actor has taken an action in our accounts. Associated cognito user pools and identity pools should be purged and locked down. Kill all sessions from the triggering role (UserIdentityArn = {TriggerRole}/CognitoIdentityCredentials).",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  NA\r\n//Reviewer:\r\n//Description: AWS CloudTrail - This query identifies users authentiocated through AWS Cognito attempting actions in our organization. Amazon Cognito can add user sign-up and sign-in features and control access to web and mobile applications. This could indicate identity compromise as these actions should never be seen in our organization.\r\n//Handling guidance: Any triggers of this should be treated as an incident. An non-employee actor has taken an action in our accounts. Associated cognito user pools and identity pools should be purged and locked down. Kill all sessions from the triggering role (UserIdentityArn = {TriggerRole}/CognitoIdentityCredentials).\r\n//\r\nAWSCloudTrail\r\n| where UserIdentityArn contains 'CognitoIdentityCredentials'\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| project\r\n    TimeGenerated,\r\n    AccountName,\r\n    EventSource,\r\n    EventName,\r\n    UserIdentityArn,\r\n    UserIdentityAccountId,\r\n    ReadOnly,\r\n    SessionIssuerUserName,\r\n    SessionIssuerArn,\r\n    SessionIssuerAccountId,\r\n    ErrorCode,\r\n    ErrorMessage,\r\n    RequestParameters,\r\n    ResponseElements,\r\n    Resources",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1199"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

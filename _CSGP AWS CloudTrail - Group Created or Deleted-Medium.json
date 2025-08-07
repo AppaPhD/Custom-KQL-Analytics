@@ -1,0 +1,121 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5ce4d415-c3ee-48ad-b637-27c361674a1b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5ce4d415-c3ee-48ad-b637-27c361674a1b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Group Created or Deleted-Medium",
+                "description": "Detects when an attempt for an IAM group is created or deleted, this should be investigated and confirmed. We do not typically use IAM groups at CoStar and highly prefer roles be used instead.\n\nHandling guidance: Identify if this was a planned / expected group modification. Review the GroupName and Source IP.\n// Contact SecOps for confirmation.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson/Shihab Nouh\r\n//Source:  NA\r\n//Reviewer: Lucas Trainer\r\n// Description: Detects when an IAM group is created or deleted, this should be investigated and confirmed. We do not typically use IAM groups at CoStar and highly prefer roles be used instead.\r\n//\r\n// Handling Guidance: Identify if this was a planned / expected group modification. Review the GroupName and Source IP.\r\n// Contact SecOps for confirmation.\r\nAWSCloudTrail\r\n| where dynamic(['CreateGroup', 'DeleteGroup']) has EventName\r\n| where EventSource == 'iam.amazonaws.com'\r\n| extend DeletedGroup_ = tostring(parse_json(RequestParameters).groupName)\r\n| extend CreatedGroupArn_ = tostring(parse_json(tostring(parse_json(ResponseElements).Group)).GroupArn)\r\n| extend CreatedGroup_ = tostring(parse_json(tostring(parse_json(ResponseElements).Group)).Name)\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| project TimeGenerated,\r\nEventName,\r\nCreatedGroup_,\r\nCreatedGroupArn_,\r\nDeletedGroup_,\r\nRequestParameters,\r\nResponseElements,\r\nErrorCode,\r\nSourceIpAddress,\r\nUserIdentityArn,\r\nSessionIssuerUserName,\r\nSessionIssuerArn,\r\narn,\r\nAccountName",
+                "queryFrequency": "PT10M",
+                "queryPeriod": "PT10M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation",
+                    "InitialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "AWS CloudTrail - Group Created or Deleted-Medium",
+                    "alertDescriptionFormat": "An IAM group has created or deleted, this should be investigated and confirmed. We do not typically use IAM groups at CoStar and highly prefer roles be used instead.\n\nHandling guidance: Identify if this was a planned / expected group modification. Review the GroupName and Source IP.  Contact SecOps for confirmation.\n\nUser: {{UserIdentityArn}} <br>\nIP: {{SourceIpAddress}} <br>\nResponseElements: {{ResponseElements}} <br>\n",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "UserIdentityArn": "UserIdentityArn",
+                    "SourceIPAddress": "SourceIpAddress"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "CreatedGroup_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "DeletedGroup_"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

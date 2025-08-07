@@ -1,0 +1,98 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/74cebc62-a28f-4f07-81dd-4fe1835d4a69')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/74cebc62-a28f-4f07-81dd-4fe1835d4a69')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - DBAPriv Activity-Informational",
+                "description": "Detects actions taken in AWS using the 'DBAPriv' roles in prd. This is a privileged role that is used by DBAs for privilege escalation in breakglass scenarios.\n// A log of when breakglass was used can be found here https://wiki.costargroup.com/pages/viewpage.action?pageId=482290998\n\nHandling guidance: Reach out to user and manager to confirm DBAPriv access was needed.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  \r\n//Reviewer: \r\n//Description: Detects actions taken in AWS using the 'DBAPriv' roles in prd. This is a privileged role that is used by DBAs for privilege escalation in breakglass scenarios.\r\n// A log of when breakglass was used can be found here https://wiki.costargroup.com/pages/viewpage.action?pageId=482290998\r\n//Handling guidance: Reach out to user and manager to confirm DBAPriv access was needed.\r\nAWSCloudTrail\r\n| where UserIdentityArn contains 'prd_dbapriv'\r\n| where ReadOnly == false\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| project TimeGenerated, AccountName, EventName, UserIdentityArn, SessionIssuerUserName, RequestParameters, SourceIpAddress",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation",
+                    "Discovery",
+                    "Reconnaissance",
+                    "InitialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

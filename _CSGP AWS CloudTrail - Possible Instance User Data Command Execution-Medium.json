@@ -1,0 +1,102 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d496c6cb-5423-4287-b900-63ec34697ecd')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d496c6cb-5423-4287-b900-63ec34697ecd')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Possible Instance User Data Command Execution-Medium",
+                "description": "Detects when an ec2 instance is stopped prior to having its user-data modified. This could allow an attacker to obtain arbitrary code execution using the instance's credentials/access.\n\nHandling guidance: Reach out to the associated user / team (if applicable) and find their use-case. Confirm with secops that this is authorized and expected. This shouldn't fire very often as people should typically be terminating/relaunching their instances rather than simple start/stopping.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Contributor: Jeremy Kesterson\r\n//Reference:  https://hackingthe.cloud/aws/exploitation/local-priv-esc-mod-instance-att/\r\n//Description: Detects when an ec2 instance is stopped prior to having its user-data modified. This could allow an attacker to obtain arbitrary code execution using the instance's credentials/access.\r\n//Handling guidance: Reach out to the associated user / team (if applicable) and find their use-case. Confirm with secops that this is authorized and expected. This shouldn't fire very often as people should typically be terminating/relaunching their instances rather than simple start/stopping.\r\nlet UserDataMods = (\r\nAWSCloudTrail\r\n| where TimeGenerated > ago(20m)\r\n| where EventName == 'ModifyInstanceAttribute'\r\n| extend RequestParams = parse_json(RequestParameters)\r\n| where tostring(RequestParams.userData) != ''\r\n| extend instanceId = tostring(RequestParams.instanceId)\r\n);\r\nAWSCloudTrail\r\n| where TimeGenerated > ago(20m)\r\n| where EventName == 'StopInstances'\r\n| extend RequestParams = parse_json(RequestParameters)\r\n| extend instance_list = RequestParams.instancesSet.items\r\n| mv-expand instance_list\r\n| extend instanceId = tostring(parse_json(instance_list).instanceId)\r\n| join UserDataMods on $left.instanceId == $right.instanceId\r\n| where TimeGenerated1 > TimeGenerated\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| project name, TimeGenerated, EventName, UserIdentityArn, RecipientAccountId, AWSRegion, instanceId, TimeGenerated1, EventName1, UserIdentityArn1, RecipientAccountId1, instanceId1, SourceIpAddress, SourceIpAddress1\r\n",
+                "queryFrequency": "PT10M",
+                "queryPeriod": "PT20M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess",
+                    "Execution",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "AccountName": "name",
+                    "UserIdentityArn": "UserIdentityArn1",
+                    "EventName": "EventName1",
+                    "SourceIPAddress": "SourceIpAddress1"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "name"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn1"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "EventName1"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress1"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

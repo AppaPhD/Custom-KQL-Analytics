@@ -1,0 +1,79 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/77571c92-accf-4e1e-b07e-8e24f8a64e31')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/77571c92-accf-4e1e-b07e-8e24f8a64e31')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Account Moved From OU-Informational",
+                "description": "Alert created when AWS Account is from from CoStar's Organizational Unit.\n\nHandling guidance: Reach out to SecOps and determine if this was expected behavior.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "//Author: Shihab Nouh/Jeremy Kesterson\r\n//Source:  \r\n//Reviewer: \r\n//Description: An account in the AWS Organiztion has been moved to another Organizational Unit (OU). This can be done to evade permissions and security controls in place\r\n// This can be done when M&A accounts are onboarded.\r\n//Handling guidance: Reach out to SecOps and determine if this was expected behavior.\r\n//\r\n//2024/09/11 - Evgeniy Cralev - updated the join from \"on $left.UserIdentityAccountID\" to \"$left.accountId_\" as this was pulling the account details of the User, rather than the account that was moved.\r\n// 4/8/2025 - Adrian Shina - updated Rule frequency & Rule period to every 15 minutes\r\nAWSCloudTrail\r\n| where dynamic([\"MoveAccount\", \"RemoveAccountFromOrganization\", \"LeaveOrganization\"]) has EventName\r\n| extend accountId_ = tostring(parse_json(RequestParameters).accountId)\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.accountId_ == $right.accountid\r\n| extend AccountName = name\r\n| project\r\n    TimeGenerated,\r\n    AccountName,\r\n    EventSource,\r\n    EventName,\r\n    accountId_,\r\n    UserIdentityPrincipalid,\r\n    UserIdentityAccountId,\r\n    SessionIssuerUserName,\r\n    SourceIpAddress,\r\n    UserIdentityArn\r\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "LateralMovement",
+                    "DefenseEvasion",
+                    "Discovery"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

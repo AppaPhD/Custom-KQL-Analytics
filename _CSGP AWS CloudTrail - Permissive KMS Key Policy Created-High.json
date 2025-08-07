@@ -1,0 +1,59 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/cdd9076b-008d-4303-90a1-bd8607a30c8f')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/cdd9076b-008d-4303-90a1-bd8607a30c8f')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Permissive KMS Key Policy Created-High",
+                "description": "An overly permissive key policy was created, resulting in KMS keys where the kms:Encrypt action is accessible to everyone (even outside of the organization). This could mean that your account is compromised and that the attacker is using the encryption key to compromise other organizations.\n\nHandling guidance: Identify the exposed key(s), and identity that took this action. Immediate guidance is to restrict principal from '*' to account root user.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  NA\r\n//Reviewer:\r\n//Description: This query identifies overly permissive KMS key policies. This allows anyone access to encryption key/encrypted material.\r\n//Handling guidance: Identify the exposed key(s), and identity that took this action. Immediate guidance is to restrict principal from '*' to account root user.\r\n//Update: 10/03/24 - stanveer added story field composed of important entities within incident. Added region and if source IP is owned by CoStar\r\nlet costarIPs = toscalar(_GetWatchlist('Costar_Public_IP_Ranges')\r\n | project cidr\r\n | summarize cidrs = make_list(cidr)\r\n);\r\nAWSCloudTrail\r\n| where EventName in (\"CreateKey\", \"PutKeyPolicy\") \r\n| where isempty(ErrorCode) and isempty(ErrorMessage)\r\n| extend Statement = parse_json(tostring(parse_json(RequestParameters).policy)).Statement\r\n| mvexpand Statement\r\n| extend inRange = ipv4_is_in_any_range(SourceIpAddress, costarIPs )\r\n| extend isCostarIP = iff (inRange == true, \"Yes\", \"No\")\r\n| extend \r\n    Action = tostring(parse_json(Statement).Action), \r\n    Effect = tostring(parse_json(Statement).Effect), \r\n    Principal = iff(isnotempty(tostring(parse_json(Statement).Principal.AWS)), tostring(parse_json(Statement).Principal.AWS), tostring(parse_json(Statement).Principal)),\r\n    PolicyType = iff(EventName == \"CreateKey\", \"Key Creation\", \"Policy Update\")\r\n| where Effect =~ \"Allow\" and (Action == \"kms:Encrypt\" or Action == \"kms:*\") and Principal == \"*\"\r\n| extend \r\n    RiskLevel = \"High\", // Default risk level for matched conditions\r\n    timestamp = TimeGenerated, \r\n    IPCustomEntity = SourceIpAddress, \r\n    Story = strcat(\"User '\", SessionIssuerUserName, \"' has performed a '\", PolicyType, \"' action allowing '\", Action, \"' with a principal of '*', which allows anyone access to encryption key/encrypted material\")\r\n| project timestamp, UserIdentityUserName, IPCustomEntity, isCostarIP, Story, AWSRegion \r\n| sort by timestamp desc",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess",
+                    "Exfiltration"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

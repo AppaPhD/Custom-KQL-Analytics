@@ -1,0 +1,79 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d3bac020-bae9-4f52-b400-041971421f1d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d3bac020-bae9-4f52-b400-041971421f1d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - AWSCompromisedKeyQuarantineV2 Policy Attachment Detected-High",
+                "description": "This query detects when a policy attachment is made with the policy \"AWSCompromisedKeyQuarantineV2\". This policy is attached only by AWS when an IAM user access key is exposed publicly on the internet (i.e. via github). This highly indicates credential compromise, and the following remediation actions should be followed:\n\nHandling guidance:\nStep 1: Rotate and delete the exposed AWS Access Key\nStep 2: Check your CloudTrail log for unsanctioned activity\nStep 3: Review your AWS account for any unauthorized AWS usage\nStep 4: [IMPORTANT] You must respond to the existing Support Case or create a new one to confirm completion of the steps above in order to restore access to your account, prevent suspension, and apply for a billing adjustment, if applicable",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  NA\r\n//Reviewer:\r\n//Description: This query detects when a policy attachment is made with the policy \"AWSCompromisedKeyQuarantineV2\". This policy is attached only by AWS when an IAM user access key is exposed publicly on the internet (i.e. via github). This highly indicates credential compromise.\r\n//\r\n//Handling guidance: \r\n//  Step 1: Rotate and delete the exposed AWS Access Key\r\n//  Step 2: Check your CloudTrail log for unsanctioned activity\r\n//  Step 3: Review your AWS account for any unauthorized AWS usage\r\n//  Step 4: [IMPORTANT] You must respond to the existing Support Case or create a new one to confirm completion of the steps above in order to restore access to your account, prevent suspension, and apply for a billing adjustment, if applicable\r\n//\r\n//\r\nAWSCloudTrail\r\n| where EventName == 'AttachUserPolicy'\r\n| where SourceIpAddress == 'AWS Internal'\r\n| where RequestParameters contains 'AWSCompromisedKeyQuarantineV2'\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| project TimeGenerated, AccountName, EventName, SourceIpAddress, RequestParameters",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1552"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

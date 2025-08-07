@@ -1,0 +1,107 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5990708a-ef0e-4fac-bd86-cc850c1163f2')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5990708a-ef0e-4fac-bd86-cc850c1163f2')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Anomalous ssm:GetParameter-Medium",
+                "description": "This query identifies any role that is used to access 'GetParameter' more than 15 times in a unusual way\n\nHandling guidance: Please refer to this in depth wiki: https://wiki.costargroup.com/pages/viewpage.action?spaceKey=SCSP&title=Unusual+Script+Invocation+Through+SSM+SendCommand+IR+Guide",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//  \r\n// Contributor: Samer Takieldin, Samuel Liu\r\n//\r\n// Reviewer: Kamran Ahmadjan, James Kim, Vivian Tran\r\n//\r\n// Reference: Stratus Red Team (https://stratus-red-team.cloud/attack-techniques/AWS/aws.credential-access.ssm-retrieve-securestring-parameters/)\r\n//\r\n// Description: This query identifies any role that is used to access 'GetParameter' more than 15 times in a unusual way\r\n//\r\n// Handling Guidance: Please refer to this in depth wiki: https://wiki.costargroup.com/pages/viewpage.action?spaceKey=SCSP&title=Unusual+Script+Invocation+Through+SSM+SendCommand+IR+Guide \r\n//\r\n// Change notes\r\n// ------------\r\n//09/05/23 exempted by asahad excluding sbx and dev principals authorized to perform ssm:getparameters to reduce alert fatigue, edited by Shihab/Samer \r\n//11/22/22 adding roles that are expected to run GetParameter\r\n//4/3/23 exempted the roles needed for getparameter to allow lambda to pull DD creds on startup per IsaacMiller\r\n//5/3/23 exempted by jkesterson. Confirmed by jnewcomer/pwaykole, this role gets third party token from ssm on every APIGW invocation: https://tfs.prd.costargroup.com/CoStarCollection/CoStar%20One/_git/we-marketing-automation-authorizer?path=%2Fpublish%2Fssm.tf&version=GBmain\r\n//9/18/23 exempted by asahad. Excluded in all environments in dataservices for reportwrangler (rw).  Confirmed this app uses parameters regularly to converse with PDS and CA: https://tfs.prd.costargroup.com/CoStarCollection/Report%20Wrangler/_git/report-wrangler?path=%2Fpublish%2Ftemplates%2Fresources%2Fssm.hbs.tf\r\n//6/15/23 exempted by jkesterson. Confirmed by Isaac Miller, this role gets TFS/Azure Devops keys to monitor for new PRs - https://dev.azure.com/costargroup/DevSecOps/_git/app-vending-machine-node?version=GBmain&path=/packages/lambda/src/pr-checker/handler.ts\r\n//10/04/23 - exempted by vtran. Confirmed by Nhat Nguyen that this role needs to get parameters to get personalize identifiers and therefore know how to interact with personalize objects\r\n//11/27/23 - exempted by asahad, this is expected behavior to batch get parameters for this role in analytics accounts\r\n//12/27/23 - Obaidah added exception for blue lane per Almahdi's instruction. For aws_apartments_prd instances, this is expected at boot time to pull in a variety of parameters from SSM parameter store.  \r\n//1/8/24 - Obaidah added exception for green lane per Almahdi's instruction. For aws_apartments_prd instances, this is expected at boot time to pull in a variety of parameters from SSM parameter store.\r\n//2/29/24 - James exempted \"arn:aws:sts::594011994820:assumed-role/rw\" to build upon exclusions by asahad on 9/18/23\r\n//2/21/24 Kamran Ahmadjan - Found & added reference, added boilerplate, added description, moved to production. \r\n//3/28/24 - Sam Liu - added Stats anomaly detection\r\nlet arns = dynamic([\"_dev_developers\", \"_dev_devops\", \"_dev_dba\", \"sbx\", \"dpp-host-\", \"bob-scoring\", \"cotour-api\", 'CSGPDivvyCloudRole', 'csgp-dpp-dlq-mon', 'crm-we-mkt-auto-auth-prd', 'arn:aws:sts::318073245971:assumed-role/csgp-rw-', 'arn:aws:sts::318073245971:assumed-role/rw', 'arn:aws:sts::446379005472:assumed-role/csgp-rw-', 'arn:aws:sts::446379005472:assumed-role/rw', 'arn:aws:sts::226665689847:assumed-role/csgp-rw-', 'arn:aws:sts::226665689847:assumed-role/rw', 'arn:aws:sts::594011994820:assumed-role/csgp-rw-', 'arn:aws:sts::594011994820:assumed-role/rw', 'arn:aws:sts::582388464592:assumed-role/csgp-residential-batcharns-dvm', 'csgp-residential-batcharns-', \"web-prd-blue-aptsweb\", \"web-prd-green-aptsweb\", \"CSGPBuildAgentRole\"]); \r\nlet zscaler =  _GetWatchlist('Zscaler_Public_IP_Ranges')\r\n    | project IP, Source;\r\nlet CostarIPs = _GetWatchlist('Costar_Public_IP_Ranges')\r\n    | project cidr, name;\r\nAWSCloudTrail\r\n| where EventName == 'GetParameter'\r\n| extend request = parse_json(RequestParameters)\r\n| where not(UserIdentityArn has_any (arns))\r\n| extend RequestAsDecrypted = tostring(request.withDecryption)\r\n| where RequestAsDecrypted == 'true'\r\n| extend parameter_arn = tostring(request.name)\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| summarize Requests = make_set(parameter_arn)\r\n    by\r\n    UserIdentityArn,\r\n    UserIdentityAccountId,\r\n    RequestAsDecrypted,\r\n    SourceIpAddress,\r\n    UserAgent\r\n| extend RequestCount = array_length(Requests)\r\n| where RequestCount >= 15\r\n| evaluate ipv4_lookup(zscaler, SourceIpAddress, IP, return_unmatched = true)\r\n| evaluate ipv4_lookup(CostarIPs, SourceIpAddress, cidr, return_unmatched = true)\r\n| extend CostarIPs = coalesce(ipv4_is_in_range(SourceIpAddress, cidr), False)\r\n| extend ZscalerIP = coalesce(ipv4_is_in_range(SourceIpAddress, IP), False)\r\n| project\r\n    UserIdentityArn,\r\n    UserIdentityAccountId,\r\n    UserAgent,\r\n    Requests,\r\n    RequestCount,\r\n    ZscalerIP,\r\n    CostarIPs,\r\n    SourceIpAddress",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Reconnaissance",
+                    "CredentialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "UserIdentityArn": "UserIdentityArn"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "Requests"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "CostarIPs"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ZscalerIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

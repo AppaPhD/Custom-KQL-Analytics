@@ -1,0 +1,93 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7aa9df53-5443-48cf-a401-2bd211f36885')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7aa9df53-5443-48cf-a401-2bd211f36885')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {
+          "EventCount": "EventCount"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountDisplayName"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "LinkList"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "SummaryList"
+              },
+              {
+                "identifier": "CreationTimeUtc",
+                "columnName": "TimeGenerated"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "Exfiltration",
+          "PrivilegeEscalation",
+          "Reconnaissance"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "displayName": "_CSGP: Atlassian Group/User/Policy Changes",
+        "enabled": true,
+        "description": "This Query will identify Group, User, and policy changes for the Atlassian Cloud applications\n\nHandling Guidance: https://costar-group-prod-dev.atlassian.net/wiki/spaces/SCSP/pages/390039244/General+Incident+Report+Handling+Guidance",
+        "alertRuleTemplateName": null,
+        "query": "// Contributor: Kamran Ahmadjan, Wajahat Malik\n//  Reviewer: Grover Mewborn, Samuel Liu\n// Reference: \n//\n// Description: This Query will identify Group, User, and policy changes for the Atlassian Cloud applications\n// Handling Guidance: 1. Review the User's Role & Department Verify the user's job function and responsibilities. 2. Analyze Changes Made. What changes are made? Is there Jira tickets available for these changes? 2. Validate Intent. Confirm with Naomi Wantz or Paul O'Neil If this activity is expected. Rollback these changes if deemed unauthorized, this will need to be escalated to the collaboration team. \n// Change Log\n// 03/28/2024 - Wajahat Malik - Adding Naomi Wantz as an exclusion as this expected activity from an Atlassian Admin\n// 5/15/25 - sliu - validating if all actiontypes are necessarily suspicious and should be monitored, also do we really need time series detection for this stuff?\n// 06/05/2025 - Anisha Ponnapati - Excludes Users who make changes to their own spaces\nlet atlassianUserGroupPolicyActions = dynamic([\"USER CREATED\", \"USER REVOKED PRODUCT ACCESS\", \"USER GRANTED PRODUCT ACCESS\", \"USER DETAIL CHANGE\", \"GROUP REVOKED PRODUCT ACCESS\", \"GROUP GRANTED PRODUCT ACCESS\", \"CONFLUENCE REMOVED SPACE PERMISSION\", \"CONFLUENCE ADDED SPACE PERMISSION\"]);\nlet lookback_ = 14d;\nlet radius = 4h;\nfx_Atlassian_Parsed\n| where ActionType in (atlassianUserGroupPolicyActions)\n| where not(AccountDisplayName in (\"Jeanora Tellis\", \"Sue Wilson\", \"Naomi Wantz\"))//excluding Sue Wilson, Naomi Wantz and Jeanora Tellis\n| extend Summary = tostring(parse_json(tostring(RawEventData.message)).content)\n| extend NamespaceName = split(Summary, \"in space \")[1] //Gets the name of the space that is being edited\n| where AccountDisplayName != NamespaceName //Excludes Users who made changes to their own space\n| extend Links = tostring(parse_json(tostring(RawEventData.links)).self)\n// | summarize SummarySet = make_set(Summary), count() by ActionType, AccountDisplayName, bin(TimeGenerated, 2h) //debugging line\n| make-series Events = count_distinct(Summary) default=0 on TimeGenerated in range(ago(lookback_), now(), 4h) by AccountDisplayName\n| extend (Outliers, Score, Baseline) = series_decompose_anomalies(Events, 3.5, 6, \"linefit\")\n| project-reorder AccountDisplayName, Events, Outliers, Baseline, Score\n| mv-expand\n    TimeGenerated to typeof(datetime),\n    Events to typeof(long),\n    Outliers,\n    Score to typeof(double),\n    Baseline to typeof(long)\n| where Outliers > 0 and Events > 5\n| where TimeGenerated > ago(14d)\n| extend start_radius = todatetime(TimeGenerated - radius)\n| extend end_radius = todatetime(TimeGenerated + radius)\n| join kind = inner (\n    fx_Atlassian_Parsed\n    | where ActionType in (atlassianUserGroupPolicyActions)\n    | where not(AccountDisplayName in (\"Jeanora Tellis\", \"Sue Wilson\", \"Naomi Wantz\"))//excluding Sue Wilson, Naomi Wantz and Jeanora Tellis\n    | extend Summary = tostring(parse_json(tostring(RawEventData.message)).content)\n    | extend Links = tostring(parse_json(tostring(RawEventData.links)).self)\n    ) on AccountDisplayName\n| where TimeGenerated1 between (start_radius .. end_radius)\n| summarize TimeGenerated = make_list(TimeGenerated1), SummaryList = make_list(Summary), LinkList = make_list(Links), EventCount = make_set(Events) by AccountDisplayName\n| project-reorder AccountDisplayName, EventCount, SummaryList, LinkList, TimeGenerated"
+      }
+    }
+  ]
+}

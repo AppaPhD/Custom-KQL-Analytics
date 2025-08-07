@@ -1,0 +1,97 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/decce82d-b8ea-4743-8698-564a3d8c50a2')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/decce82d-b8ea-4743-8698-564a3d8c50a2')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Org Role Assumed by Non Build Agent-High",
+                "description": "OrganizationAccountAccessRole was assumed in AWS where actions taken do not include Describing Vpcs, Describing Flow logs, Describing Regions, and Listing Account aliases\n\nHandling Guidance: Typically, OrganizationAccountAccessRole should not be used except in cases of account maintenance. Identify if this was a planned or expected. Review the account and the user.",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Vivian Tran/Jeremy Kesterson/Shihab Nouh\r\n//Source:  NA\r\n//Reviewer: Lucas Trainer\r\n// Description: OrganizationAccountAccessRole was assumed in AWS where actions taken do not include Describing Vpcs, Describing Flow logs, Describing Regions, and Listing Account aliases\r\n// Handling Guidance: Typically, OrganizationAccountAccessRole should not be used except in cases of account maintenance. Identify if this was a planned or expected. Review the account and the user.\r\n// Change Log\r\n// 10/29/2024 - Wajahat Malik - Expanded the scope by taking out the exclusions and narrowing down the IP exclusion\r\n// 3/11/2025- Renee Sen - Change time to running ever 5 minutes rather than ever hour\r\nAWSCloudTrail\r\n| where SessionIssuerUserName == \"OrganizationAccountAccessRole\"\r\n| where not(ipv4_is_in_range(SourceIpAddress, '38.109.150.32/27'))//Costar Trusted IP range\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| project\r\n    AccountName,\r\n    UserIdentity,\r\n    EventName,\r\n    SourceIpAddress,\r\n    UserIdentityArn,\r\n    TimeGenerated",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

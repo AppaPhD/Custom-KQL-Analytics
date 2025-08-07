@@ -1,0 +1,93 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f37dd394-c495-4bcf-b6bd-ce6bb946bc2d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f37dd394-c495-4bcf-b6bd-ce6bb946bc2d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - SAML Identity Provider Updated-High",
+                "description": "Attackers could update the SAML provider in order to create unauthorized but valid tokens and represent them to services that trust SAML tokens from the environment. These tokens can then be used to access resources. More about this API at https://docs.aws.amazon.com/IAM/latest/APIReference/API_UpdateSAMLProvider.html\n\nHandling guidance: Validate the principal(s) making this change and who invoked them.  Only two principals should have the ability to make this change:  If from the buildrole, it would have a TFS release tied to it.  If the organization role, it could be tied to a new account creation or a rare update to a SAML provider.  In other cases, this should be investigated further as a possible incident.",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  NA\r\n//Reviewer: Almahdi Sahad\r\n//Description: This query identifies updates to SAMLProvider configs in IAM Identity Provider Settings.  This should be a rare and infrequent event that could either be a member of the SecOps team making a rare update to an existing SAML Provider configuration, or a bad actor updating a trust policy in order to maintain persistence\r\n//Attackers could update the SAML provider in order to create unauthorized but valid tokens and represent them to services that trust SAML tokens from the environment. These tokens can then be used to access resources. More about this API at https://docs.aws.amazon.com/IAM/latest/APIReference/API_UpdateSAMLProvider.html\r\n//Handling guidance: Validate the principal(s) making this change and who invoked them.  Only two principals should have the ability to make this change:  If from the buildrole, it would have a TFS release tied to it.  If the organization role, it could be tied to a new account creation or a rare update to a SAML provider.  In other cases, this should be investigated further as a possible incident.\r\nAWSCloudTrail\r\n| where EventName == \"UpdateSAMLProvider\" and isempty(ErrorCode) and isempty(ErrorMessage)\r\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\r\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\r\n| extend Environment_ = tostring(parse_json(RequestParameters).s3KeyPrefix)\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| project TimeGenerated,\r\nUserIdentityArn,\r\nUserIdentity = split(UserIdentityArn, '/')[2],\r\nAccountName = name,\r\nSessionIssuerUserName,\r\nEventName,\r\nEnvironment_,\r\nRequestParameters,\r\nResponseElements,\r\nErrorCode,\r\nSourceIpAddress,\r\nSessionIssuerArn,\r\narn",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1556"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "UserIdentityArn": "UserIdentityArn",
+                    "EventName": "EventName"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

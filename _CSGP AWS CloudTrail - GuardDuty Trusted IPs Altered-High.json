@@ -1,0 +1,94 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a215f5d5-6717-4116-a8ac-cbb4861b58fe')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a215f5d5-6717-4116-a8ac-cbb4861b58fe')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - GuardDuty Trusted IPs Altered-High",
+                "description": "This IP list excludes IPs from generating guardduty alerts. Any change in this list is considered high risk and MUST be authorized by secops.\n\nHandling guidance: Confirm with secops that this modification was expected and authorized.",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  NA\r\n//Reviewer: Lucas Trainer\r\n//Description: This IP list excludes IPs from generating guardduty alerts. Any change in this list is considered high risk and MUST be authorized by secops.\r\n// As of 3/6/2024, there is no IPs in the trusted IP list\r\n//Handling guidance: Confirm with secops that this modification was expected and authorized.\r\nAWSCloudTrail\r\n| where EventName == 'UpdateIPSet'\r\n| where EventSource == 'guardduty.amazonaws.com'\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| project\r\n    TimeGenerated,\r\n    AccountName,\r\n    EventName,\r\n    EventTypeName,\r\n    UserIdentityArn,\r\n    SessionIssuerArn,\r\n    SearchKey,\r\n    name,\r\n    email,\r\n    arn,\r\n    SourceIpAddress,\r\n    UserAgent",
+                "queryFrequency": "PT10M",
+                "queryPeriod": "PT10M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "AWS CloudTrail - GuardDuty Trusted IPs Altered-High",
+                    "alertDescriptionFormat": "Detects when an IP in the custom excluded IP list for GuardDuty alerts is added or removed. TAny change in this list is considered high risk and MUST be authorized by secops.\n\nHandling guidance: Confirm with secops that this modification was expected and authorized.\n\nUserIdentityArn: {{UserIdentityArn}} <br>",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,86 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/0ab09f06-54e6-429d-9998-3431090d84d5')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/0ab09f06-54e6-429d-9998-3431090d84d5')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - User with Numerous Unique Failed Actions-Medium",
+                "description": "Detects when a user has 10 or greater unique failed actions within 4h. Could indicate account compromise.\n\nHandling guidance: Determine if attempted actions seem suspicious/malicious, and reach out to secops to investigate further if so.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Source:  \r\n//Reviewer: Samuel Liu\r\n//Description: Detects when a user has 10 or greater unique failed actions within 30m. Could indicate account compromise.\r\n//Handling guidance: Determine if attempted actions seem suspicious/malicious, and reach out to secops to investigate further if so.\r\n//Change Log:\r\n//      - Kamran Ahmadjan: made exclusion with let statement\r\n//      - Sam: Refactored the analytic to make it run much faster with less lines of code while maintaining same logic, increased time frame to 1h\r\n//      - Sam + Nixy: Added WizAccess-Role exclusion, added anomaly detection and enrichment\r\nlet flatthresh = 10; \r\nlet UserIDARNs = dynamic(['divvycloud', 'datadog', 'csgpfmsconfigrole', 'csgpbuildagentrole', 'databricks']); //these are the exclusions for the userIDarn\r\n//Events commonly triggered on user console sign-in. Caused by console homepage widgets (many come by default that users do not have permission to access)\r\nlet ExcludedEvents = dynamic(['ListNotificationHubs', 'ListSinks', 'DescribeEventAggregates', 'ListApplications', 'DescribeHub', 'ListIndexes', 'ListZonalShifts', 'GetCostAndUsage', 'GetCostForecast']);\r\nlet WhitelistedErrorCodes = dynamic(['Access Denied', 'LimitExceededException', 'Client.RequestLimitExceeded', 'Client.UnauthorizedOperation', 'RegionDisabledException', 'Forbidden', 'ForbiddenException', 'TooManyRequestsException', 'NotAuthorizedException', 'AccessDeniedFault']);\r\nlet services = (AWSCloudTrail\r\n    | project-reorder TimeGenerated, AwsEventId, EventName, ErrorCode, ErrorMessage //devtesting\r\n    | where TimeGenerated > ago(1d)\r\n    | where isnotempty(ErrorCode) or isnotempty(ErrorMessage)\r\n    | where ErrorCode has_any (WhitelistedErrorCodes)\r\n    | where not(EventName has_any (ExcludedEvents)) \r\n    | where EventName !contains 'GetBucket' //Remove GetBucket* from results as looking at any bucket in console can spam these actions.\r\n    | where UserIdentityArn !contains 'AWSServiceRole' and UserIdentityArn !contains 'config-role' // Exclude service roles and config roles as they spam readonly calls by nature\r\n    | distinct UserIdentityArn, EventSource, UserIdentityAccountId, ErrorCode, ErrorMessage\r\n    | where isnotempty(UserIdentityArn)\r\n    | where not (tolower(UserIdentityArn) has_any (UserIDARNs))  // Exclude datadog/divvy roles in case they get new required permissions and spam failures\r\n    | summarize\r\n        UniqueServices=make_set(EventSource),\r\n        ErrorCodes = make_set(ErrorCode),\r\n        ErrorMessages = make_list(ErrorMessage)\r\n        by UserIdentityArn\r\n    | extend serviceCount = array_length(UniqueServices)\r\n    | extend UserIdentity = tostring(split(UserIdentityArn, '/')[2])\r\n    | project\r\n        serviceCount,\r\n        UserIdentity,\r\n        UserIdentityArn,\r\n        UniqueServices,\r\n        ErrorCodes,\r\n        ErrorMessages);\r\nAWSCloudTrail\r\n// | where TimeGenerated > ago(1h)\r\n| where isnotempty(ErrorCode) or isnotempty(ErrorMessage)\r\n| where ErrorCode has_any (WhitelistedErrorCodes)\r\n| where ErrorCode !contains \"DescribeRegions\"\r\n| where not(EventName has_any(ExcludedEvents))\r\n| where EventName !contains 'GetBucket' //Remove GetBucket* from results as looking at any bucket in console can spam these actions.\r\n| where UserIdentityArn !contains 'AWSServiceRole' and UserIdentityArn !contains 'config-role' // Exclude service roles and config roles as they spam readonly calls by nature\r\n| where UserIdentityArn !contains \"DatadogAWSIntegration\"\r\n| where UserIdentityArn !contains \"WizAccess-Role\" //should remove this later, after we troubleshoot wiz\r\n| where isnotempty(UserIdentityArn)\r\n| where not (tolower(UserIdentityArn) has_any (UserIDARNs)) // Exclude datadog/divvy roles in case they get new required permissions and spam failures\r\n// | make-series Events=count(ErrorCode) default=0 on TimeGenerated in range(ago(14d), now(), 4h) by UserIdentityArn // this is for testing raw volume instead of unique\r\n| make-series Events=count_distinct(ErrorCode) default=0 on TimeGenerated in range(ago(14d), now(), 4h) by UserIdentityArn\r\n| summarize EventCount=make_list(Events, 1000), TimeGenerated=make_list(TimeGenerated, 1000) by UserIdentityArn\r\n| extend (outliers, score, baseline) = series_decompose_anomalies(EventCount, 3.5, -1, \"linefit\") //anomaly detection with statistics\r\n| mv-expand\r\n    TimeGenerated,\r\n    EventCount to typeof(long),\r\n    outliers,\r\n    baseline to typeof(long),\r\n    score to typeof(double)\r\n| where outliers > 0 //filter for behavioral anomalies\r\n| where EventCount > flatthresh\r\n| extend UserIdentity = tostring(split(UserIdentityArn, '/')[2])\r\n| join kind=leftouter _GetWatchlist('aws-accounts') on $left.UserIdentity == $right.accountid\r\n| join kind=leftouter services on $left.UserIdentityArn == $right.UserIdentityArn\r\n| where TimeGenerated > ago(1d)",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Reconnaissance",
+                    "InitialAccess",
+                    "PrivilegeEscalation",
+                    "CredentialAccess",
+                    "Discovery"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": false,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "AccountName": "name",
+                    "UserIdentityArn": "UserIdentityArn"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "name"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

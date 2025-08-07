@@ -1,0 +1,89 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a525f5df-ca5c-4efd-8531-0b3a9cef8d9f')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a525f5df-ca5c-4efd-8531-0b3a9cef8d9f')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Logging Disabled Stopped-High",
+                "description": "Detects when logging is stopped or deleted for cloudtrail. This could be used for defense evasion and is considered very infrequent and suspicious.\n\nHandling guidance: Reach out to the associated user / team (if applicable) and find their use-case. Confirm with secops that this is authorized and expected.\n\nHandling guidance: Reach out to the associated user / team (if applicable) and find their use-case. Confirm with secops that this is authorized and expected.",
+                "severity": "High",
+                "enabled": true,
+                "query": "//Contributor: Jeremy Kesterson\r\n//Reference:  https://expel.io/blog/following-cloudtrail-generating-aws-security-signals-sumo-logic/  \r\n//Reviewer: Lucas Trainer\r\n//Changelog: 7/19/2023 excluded aws_security_sbx to allow for testing \r\n//Description: Detects when logging is stopped or deleted for cloudtrail. This could be used for defense evasion and is considered very infrequent and suspicious.\r\n//Handling guidance: Reach out to the associated user / team (if applicable) and find their use-case. Confirm with secops that this is authorized and expected.\r\nAWSCloudTrail\r\n| where dynamic(['DeleteTrail', 'DisableLogging', 'StopLogging']) has EventName\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| where AccountName != \"aws_security_sbx\"\r\n| extend LogName = parse_json(RequestParameters).name\r\n| project\r\n    TimeGenerated,\r\n    AccountName,\r\n    EventSource,\r\n    EventName,\r\n    UserIdentityArn,\r\n    UserIdentityAccountId,\r\n    SessionIssuerUserName,\r\n    SessionIssuerArn,\r\n    LogName,\r\n    ErrorCode,\r\n    ErrorMessage,\r\n    RequestParameters",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT15M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "CloudApplication"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "AWS CloudTrail - {{AccountName}}: Logging Disabled / Stopped (Defense Evasion)",
+                    "alertDescriptionFormat": "Analytic rule detects when logging is stopped or deleted either for cloudtrail or netflows. Disabling logging could be used for defense evasion and is considered very infrequent / suspicious.\n\nKey Fields:<br>\nEnvironment: {{AccountName}} <br>\nAction: {{RequestParameters}} <br>\nActor: {{UserIdentityArn}} <br>\n\nHandling guidance: Reach out to the associated user / team (if applicable) and find their use-case. Confirm with secops that this is authorized and expected.\n\nFalse postives may occur where the Environment ends with _tst or _dev, and a team is deleting resources",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {
+                    "RequestParameters": "RequestParameters",
+                    "LogName": "LogName",
+                    "ErrorMessage": "ErrorMessage"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

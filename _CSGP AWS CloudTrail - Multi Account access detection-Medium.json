@@ -1,0 +1,71 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/fe0af74f-fd0d-4b9e-893e-91761d5a9282')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/fe0af74f-fd0d-4b9e-893e-91761d5a9282')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: AWS CloudTrail - Multi Account access detection-Medium",
+        "description": "This query identifies users assuming a role with SAML in more than 15 accounts in a short period of time.\n\nHandling guidance: Identify the user that triggered the alert and validate the behavior is expected.  Review actions in cloudtrail across accounts for any potential malicious activity.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "//Contributors: Lionel Brosson, Samuel Liu\n//Source:  NA\n//Reviewer: James Kim, Vivian Tran\n//Description: AWS CloudTrail - This query identifies users assuming a role with SAML (logging in with SSO) in more than 15 accounts in a short period of time. This can also be due to an automated process logging into multiple accounts at once.\n//Handling guidance: Identify and verify with the user that triggered the alert and validate that the behavior is expected. Review actions in cloudtrail across accounts for any potential malicious activity.\n//\nAWSCloudTrail\n| where UserIdentityArn has_any(\"dba\",\"developers\",\"systems\",\"security\",\"network\",\"secops\",\"devops\")\n| where EventTypeName has \"AwsConsoleSignIn\" and UserIdentityType == \"AssumedRole\" //look for events that are specifically signins and also has is a USER assuming a role\n| where UserIdentityArn !contains (\"AWSServiceRole\")\n| where (UserIdentityArn !contains '_devops' or (UserAgent !contains 'eks.update-kubeconfig') and UserAgent !contains 'eks.list-clusters') //7/10/23 - jkesterson - Devops script does this to connect to all clusters at once\n| extend user = split(UserIdentityArn, \"/\")[-1]\n| summarize numDistinctAccounts = count_distinct(UserIdentityAccountId), AccountsAccessed = make_set(UserIdentityAccountId) by tostring(user)\n| where numDistinctAccounts > 15 //adjust this to be the threshold for when things get suspicious; previously was 25\n| mv-expand AccountsAccessed\n| extend AccountsAccessed = tostring(AccountsAccessed)\n| join kind=inner _GetWatchlist('aws-accounts') on $left.AccountsAccessed == $right.accountid\n| summarize make_list(name) by user\n| extend DistinctAccounts = array_length(list_name)\n| project-rename Principal = user, list_AccountName = list_name",
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "Reconnaissance",
+          "Discovery"
+        ],
+        "techniques": [],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {"AccountsAccessed": "list_AccountName"},
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "Principal"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

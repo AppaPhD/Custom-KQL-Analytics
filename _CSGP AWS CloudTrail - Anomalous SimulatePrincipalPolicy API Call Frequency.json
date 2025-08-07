@@ -1,0 +1,86 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f8bad073-1a1f-4290-adbf-ce9e587a7ecd')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f8bad073-1a1f-4290-adbf-ce9e587a7ecd')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: AWS CloudTrail - Anomalous SimulatePrincipalPolicy API Call Frequency",
+        "description": "This is a detection that looks for extreme high frequency of calls to SimulatePrincipalPolicy that could be considered unusual. \"SimulatePrincipalPolicy\" is an AWS API event that can allow an attacker to simulate how a set of IAM policies attached to an IAM entity work with a list of API operations & AWS resources, to determine the policies' effective permissions. (Reference: https://traildiscover.cloud/#IAM-SimulatePrincipalPolicy)\n\nHandling Guidance: Investigate any UserIdentityArn principals in AWS, as well as the EventCount. Verify with a team member, SecOps, or AWS account owners to understand if this is expected or unusual activity, correlated with other detections, that could indicate an attacker performing discovery.",
+        "severity": "Medium",
+        "enabled": true,
+        "query": "// Author(s): Nixy Camacho, Samuel Liu\n// Reviewer: Grover Mewborn\nlet starttime = 14d;\nlet timeframe = 4h;\nlet scorethreshold = 1.5; // measures how far off the baseline for logging behavior to be considered anomalous\nlet expectedSessionIssuers = dynamic(['AWSServiceRoleForSupport', 'stacklet-execution']);\nlet enrich = (\nAWSCloudTrail\n| where TimeGenerated > ago(starttime)\n| where EventName == \"SimulatePrincipalPolicy\"  and UserIdentityPrincipalid has \"@\"\n| summarize EventNames = make_set(EventName) by UserIdentityArn, UserIdentityInvokedBy, UserIdentityUserName, UserAgent, SourceIpAddress, AWSRegion, bin(TimeGenerated, 6h) \n| extend TimeGenerated = format_datetime(todatetime(TimeGenerated),\"M/d/yyyy, h:mm:ss:fff tt\")\n| extend TimeGenerated = tostring(TimeGenerated));\nAWSCloudTrail\n| where TimeGenerated > ago(starttime)\n| where EventName == \"SimulatePrincipalPolicy\" and UserIdentityPrincipalid !has \"@\" //look for more specific data where no SSO users are doing this\n| where SessionIssuerUserName !in~ (expectedSessionIssuers)\n| extend ParsedRequestParam = parse_json(RequestParameters)\n| extend Actions = ParsedRequestParam.actionNames\n| where tostring(Actions) != \"[\\\"iam:CreateUser\\\",\\\"lambda:CreateFunction\\\"]\"\n| make-series Events=count(), default=0 on TimeGenerated in range(ago(starttime), now(), 4h) by  UserIdentityArn\n| summarize EventCount=make_list(Events, 1000), TimeGenerated=make_list(TimeGenerated, 1000) by  UserIdentityArn\n| extend (outliers, score, baseline) = series_decompose_anomalies(EventCount, scorethreshold, 6, \"linefit\")\n| mv-expand TimeGenerated, EventCount to typeof(long), outliers, baseline to typeof(long), score to typeof(double)\n| where outliers > 0 and todatetime(TimeGenerated) > ago(8h)\n| where EventCount > 10 //devops does simulatepolicy testing within their sbx devops lab in consistent frequencies of 8, they also then delete the account right after\n| extend TimeGenerated = format_datetime(todatetime(TimeGenerated),\"M/d/yyyy, h:mm:ss:fff tt\")\n| extend TimeGenerated = tostring(TimeGenerated)\n| join kind=leftouter enrich on  UserIdentityArn, TimeGenerated\n| order by EventCount",
+        "queryFrequency": "PT5H",
+        "queryPeriod": "P14D",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": [
+          "Discovery"
+        ],
+        "techniques": [
+          "T1087"
+        ],
+        "subTechniques": [],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Account"
+            ],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "customDetails": {
+          "EventCount": "EventCount",
+          "Score": "score"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserIdentityArn"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "TimeGenerated"
+              }
+            ]
+          }
+        ],
+        "sentinelEntitiesMappings": null,
+        "templateVersion": null
+      }
+    }
+  ]
+}

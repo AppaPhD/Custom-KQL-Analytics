@@ -1,0 +1,88 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/28272c7d-6412-4e5a-b8c5-28dd5098ed08')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/28272c7d-6412-4e5a-b8c5-28dd5098ed08')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Privileged Policy Attached to a Role/User",
+                "description": "Identifies when a Privileged role is attached to an instance/user. This icould be used by an adversary to escalate permissions of a user/instance. This rule is only scoped to the acquisition accounts since SCPs are not enabled in those accounts.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Contributor: Wajahat Malik\r\n// Reviewer: Sufian Tanveer\r\n//\r\n// Description: Identifies when a Privileged role is attached to an instance/user. This icould be used by an adversary to escalate permissions of a user/instance. This rule is only scoped to the acquisition accounts since scps are not enabled in those accounts.\r\n//\r\n// Handling Guidance: 1) Verify with the user making the change if the PolicyArn is expected for the specific Role/ User. 2) Validate this information in Wiz: search for the RoleName/UserName and search for the PolicyArn in the Raw Access Policies section\r\n//\r\n// Change Log:\r\n// 10/03/2024 -Wajahat Malik - Intial Version\r\n// 10/14/2024 - Wajahat Malik - Narrowed the scope of the alert to only acquisistion accounts\r\nlet EventNameList = dynamic([\"AttachUserPolicy\", \"AttachRolePolicy\"]);\r\nlet PolicyArnList = dynamic([\"arn:aws:iam::aws:policy/AdministratorAccess\", \"arn:aws:iam::aws:policy/DatabaseAdministrator\", \"arn:aws:iam::aws:policy/NetworkAdministrator\", \"arn:aws:iam::aws:policy/SystemAdministrator\", \"arn:aws:iam::aws:policy/AmazonS3FullAccess\"]);\r\nlet acquisition_accounts =_GetWatchlist(\"acquisition_accounts\") | project SearchKey;\r\nAWSCloudTrail\r\n| where EventName in (EventNameList)\r\n| extend parsedJson = parse_json(RequestParameters)\r\n| extend firstKey = tostring(bag_keys(parsedJson)[0]) \r\n| extend name = tostring(parsedJson[firstKey])  \r\n| extend secondKey = tostring(bag_keys(parsedJson)[1]) \r\n| extend policyArn = tostring(parsedJson[secondKey])\r\n| where policyArn in (PolicyArnList)\r\n| extend account = split(SessionIssuerUserName, \"_\")\r\n| extend account_name = strcat(account[0] , \"_\" , account[1] , \"_\" , account[2])\r\n| where UserIdentityArn !contains \"AWSServiceRoleForCloudFormationStackSetsOrgMember\"\r\n| where account_name !startswith \"aws\" or account_name in (acquisition_accounts)\r\n| project TimeGenerated, account_name, name, policyArn, EventName, UserIdentityType, UserIdentityPrincipalid, UserIdentityArn, UserIdentityInvokedBy, UserIdentityAccessKeyId, SessionIssuerArn, SourceIpAddress,UserAgent ",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "name"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "policyArn"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "account_name"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

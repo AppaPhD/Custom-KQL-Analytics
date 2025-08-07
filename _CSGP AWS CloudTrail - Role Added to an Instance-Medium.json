@@ -1,0 +1,89 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6e110434-a175-439d-8782-b49b65b0f12e')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6e110434-a175-439d-8782-b49b65b0f12e')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Role Added to an Instance-Medium",
+                "description": "Identifies when a Privileged role is attached to an existing instance or new instance at deployment. This instance may be used by an adversary to escalate a normal user privileges to an adminsitrative level. The specific event tracked in cloudtrail is \"AddRoleToInstanceProfile\".\nImportant note - This query assumes the role is added for the first time because it is unable to view historical profile information.\n\nHandling Guidance: Verify with the user making the change if the PolicyArn in expected for the specific Role. Validate this information in Wiz: search for the RoleName (Service Account) and search for the PolicyArn in the Raw Access Policies section.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// Authors: MS Ashwin Patel & Pete Bryan\r\n// Source: https://github.com/Azure/Azure-Sentinel/blob/master/Hunting%20Queries/AWSCloudTrail/AWS_PrivilegedRoleAttachedToInstance.yaml\r\n// Contributor: Lucas Trainer\r\n// Reviewer: James Kim, Vivian Tran\r\n//\r\n// Description: Identifies when a Privileged role is attached to an existing instance or new instance at deployment. This instance may be used by an adversary to escalate a normal user privileges to an adminsitrative level. The specific event tracked in cloudtrail is \"AddRoleToInstanceProfile\".\r\n// Important note - This query assumes the role is added for the first time because it is unable to view historical profile information.\r\n//\r\n// Handling Guidance: Verify with the user making the change if the PolicyArn in expected for the specific Role. Validate this information in Wiz: search for the RoleName (Service Account) and search for the PolicyArn in the Raw Access Policies section\r\n//\r\nlet EventNameList = dynamic([\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\"]);\r\nlet PolicyArnList = dynamic([\"arn:aws:iam::aws:policy/AdministratorAccess\",\"arn:aws:iam::aws:policy/DatabaseAdministrator\",\"arn:aws:iam::aws:policy/NetworkAdministrator\",\"arn:aws:iam::aws:policy/SystemAdministrator\",\"arn:aws:iam::aws:policy/AmazonS3FullAccess\"]);\r\n  //Creating a temp table of events creating privileged role or users which can later be correlated with suspicious operations.\r\n  let PrivilegedRoleorUsers = AWSCloudTrail\r\n  | where EventName in (EventNameList)\r\n  | extend PolicyArn = tostring(parse_json(RequestParameters).policyArn), RoleName = tostring(parse_json(RequestParameters).roleName)\r\n  | where PolicyArn in (PolicyArnList)\r\n  | distinct PolicyArn, UserIdentityType, UserIdentityUserName,RoleName;\r\n  // Joining the list of identities having Privileged roles with the API call AddRoleToInstanceProfile to indentify the instances which may be used by adversaries as pivot point for privilege escalation.\r\n  PrivilegedRoleorUsers\r\n  | join (\r\n  AWSCloudTrail\r\n  | where EventName in (\"AddRoleToInstanceProfile\") \r\n  | extend InstanceProfileName = tostring(parse_json(RequestParameters).InstanceProfileName), RoleName = tostring(parse_json(RequestParameters).roleName)\r\n  | summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventSource, EventName, UserIdentityType , UserIdentityArn , UserIdentityUserName, SourceIpAddress, RoleName, UserIdentityAccountId\r\n  ) on RoleName \r\n  | join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n  |  extend AccountName = name\r\n  | extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n  | project TimeChanged = EndTimeUtc, PolicyArn, UserIdentityAccountId, RoleName, UserIdentity, UserIdentityArn, SourceIpAddress, arn, accountid, AccountName = name, EventName",
+                "queryFrequency": "PT4H",
+                "queryPeriod": "PT4H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "UserIdentityArn": "UserIdentityArn",
+                    "EventName": "EventName"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

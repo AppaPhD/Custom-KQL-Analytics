@@ -1,0 +1,90 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/058cb0ec-bb26-4360-bd02-8ba235e18fb3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/058cb0ec-bb26-4360-bd02-8ba235e18fb3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Multiple Get Instance Profile-Medium",
+                "description": "Detects when a principal performs at least 10 unique ec2:GetInstanceProfile calls in an hour. This could indicate discovery tactics to find what these instance profiles have access to or it can be part of the service role's configuration to have an automated task.\n\nHandling guidance: Reach out to the associated user / team (if applicable) and find their use-case for running GetInstanceProfile. Confirm with secops that this is authorized and expected. This shouldn't fire very often as people should typically already know what their instances have access to.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Contributor: Jeremy Kesterson, Jack Warner, Kamran Ahmadjan\r\n//Reviewer: James Kim, Vivian Tran\r\n//Description: Detects when a principal performs at least 5 unique ec2:GetInstanceProfile calls in an hour. This could indicate discovery tactics to find what these instance profiles have access to or it can be part of the service role's configuration to have an automated task.\r\n//Handling guidance: Reach out to the associated user / team (if applicable) and find their use-case for running GetInstanceProfile. Confirm with secops that this is authorized and expected. This shouldn't fire very often as people should typically already know what their instances have access to.\r\n// \r\n// Notes\r\n// ............\r\n// Exclude EKS management role as new nodes have this action called automatically.\r\n// Exclude WizAccessRole as it will inventory all instance profiles. jkesterson 6/12/23\r\n// Exclude since role can only be assumed by AWS. vtran 10/05/2023\r\n// Excluding aws config roles jwarner 10/12/2023 \r\n// Added threshold value of 16 for VL accounts aws_vl_tst and aws_vl_prd and removed Luke Welton as an exclusion wmalik 03/21/2025\r\nlet arns = dynamic(['WizAccess-Role', \"CSGPFMSConfigrole-\", \"config-role\", \"AWSServiceRoleForConfig\"]); \r\nAWSCloudTrail\r\n| where EventName == 'GetInstanceProfile'\r\n| where SourceIpAddress != 'AWS Internal' // Exclude unintentional calls (AWS Internal source means it was called by a service for the user)\r\n| where UserIdentityArn !contains 'AWSServiceRoleForAmazonEKSNodegroup/EKS' and UserIdentityArn !contains 'CSGPBuildAgentRole' \r\n| where not(UserIdentityArn has_any (arns))\r\n| extend EC2ProfileName = tostring(parse_json(RequestParameters).instanceProfileName)\r\n| distinct\r\n    UserIdentityArn,\r\n    CalledInstanceProfiles = EC2ProfileName,\r\n    UserIdentityAccountId,\r\n    EventName,\r\n    UserAgent,\r\n    ErrorMessage\r\n| summarize make_list(CalledInstanceProfiles) by UserIdentityArn, UserIdentityAccountId, EventName, UserAgent, ErrorMessage\r\n| extend Count = array_length(list_CalledInstanceProfiles)\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| extend threshold = case(AccountName has \"aws_vl_tst\", threshold = 16, AccountName has \"aws_vl_prd\", threshold = 16, threshold = 10)//Adding threshold value of 16 for VL accounts aws_vl_tst and aws_vl_prd other keeping the threshold value to 10\r\n| where Count >= threshold\r\n//| where UserIdentity <> \"lwelton@costar.com\"\r\n| where UserAgent <> \"cloudformation.amazonaws.com\"\r\n| project\r\n    AccountName,\r\n    UserIdentity,\r\n    EventName,\r\n    UserIdentityArn,\r\n    accountid,\r\n    Count,\r\n    list_CalledInstanceProfiles,\r\n    UserAgent,\r\n    ErrorMessage",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Reconnaissance",
+                    "Discovery",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "SecurityGroup",
+                        "fieldMappings": [
+                            {
+                                "identifier": "DistinguishedName",
+                                "columnName": "list_CalledInstanceProfiles"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

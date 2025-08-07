@@ -1,0 +1,100 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/2ffe1970-17b8-4003-ae7b-051346136899')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/2ffe1970-17b8-4003-ae7b-051346136899')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - SSM:StartSession from Non SSORole-Medium",
+                "description": "Detects when a non-SSO principal performs ssm:StartSession. This action is used to connect to EC2 instances, and should only be performed by authorized human principals (AKA SSO roles). \n\nHandling guidance: Find the owner of the IAM principal, and figure out why a non-human needs StartSession privileges. Ideally we can remove the ability for these principals to make this API call.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Author: Jeremy Kesterson\r\n//Contributor: Jack Warner \r\n//Reference: \r\n//Description: Detects when a non-SSO principal performs ssm:StartSession. This action is used to connect to EC2 instances, and should only be performed by authorized human principals (AKA SSO roles).\r\n//Handling guidance: Find the owner of the IAM principal in Wiz by searching the UserIdentityArn under AWS Resource with ARN, and figure out why a non-human needs StartSession privileges. Ideally we can remove the ability for these principals to make this API call.\r\nAWSCloudTrail\r\n| where EventSource == 'ssm.amazonaws.com' and EventName == 'StartSession'\r\n| where not(UserIdentityArn matches regex 'arn:aws:sts::([0-9]+):assumed-role/aws_*_[sbx|dev|tst|tsr|prd]*')\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| where not(name contains (\"payments\") and (UserIdentityArn contains \"csgpbuildpaymentsrole\" or UserIdentityArn contains \"csgpbuildpaymentstsrrole\")) //Jack Warner: Exempting build orle to instances running in all the paymenbts accounts periodically. It's mostly for trouble shooting and restarting services. \r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| project TimeGenerated, UserIdentity, UserIdentityArn, EventName, UserAgent, accountid, AccountName = name, SourceIpAddress, RequestParameters",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CommandAndControl",
+                    "Execution",
+                    "InitialAccess",
+                    "LateralMovement"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "UserIdentityArn": "UserIdentityArn"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

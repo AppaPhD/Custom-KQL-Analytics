@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1ca9f268-bd1b-472e-84cf-ef2a48df0b0f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1ca9f268-bd1b-472e-84cf-ef2a48df0b0f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "displayName": "_CSGP: AWS CloudTrail - Human users manually assuming the CSGPBuildAgentRole",
+        "description": "Detects user principals manually assuming the CSGPBuildAgentRole after generating Vault OIDC temporary credentials. Should not fire as SecOps has already put controls in place for this. Would be a 'high' and needs to be investigated if this ever fires.\n\nHandling Guidance: Investigate source IP address, user agent, and other details provided. Make sure to escalate to SecOps. ",
+        "severity": "High",
+        "enabled": true,
+        "query": "// Detection for user principals manually assuming the CSGPBuildAgentRole after generating Vault OIDC temporary credentials. Should not fire as SecOps has already put controls in place for this. Would be a 'high' and needs to be investigated if this ever fires. Occured during the Praetorian engagement early 2025.\n// Author(s): Nixy Camacho, Quang Quach \n// Reviewer: Grover Mewborn\nAWSCloudTrail\n| where SessionIssuerUserName == \"CSGPBuildAgentRole\" and UserIdentityPrincipalid has \"vault-oidc\"          //Assuming the IAM role of CSGPBuildAgentRole from Vault via OIDC IdP given by generating credentials   \n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\n| project TimeGenerated, EventName, AWSAccountName=name, UserIdentityAccessKeyId, UserIdentityAccountId, UserIdentityArn, SourceIpAddress, UserAgent, ErrorCode, ErrorMessage",
+        "queryFrequency": "PT30M",
+        "queryPeriod": "PT30M",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "startTimeUtc": null,
+        "tactics": ["PrivilegeEscalation","Discovery","LateralMovement"],
+        "techniques": ["T1078","T1134","T1087","T0859","T1021"],
+        "subTechniques": ["T1078.004","T1134.003","T1087.004"],
+        "alertRuleTemplateName": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT1H",
+            "matchingMethod": "Selected",
+            "groupByEntities": ["Account","Process","IP"],
+            "groupByAlertDetails": ["DisplayName","Severity"],
+            "groupByCustomDetails": []
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "alertDetailsOverride": null,
+        "customDetails": {},
+        "entityMappings": [{"entityType":"Account","fieldMappings":[{"identifier":"Sid","columnName":"AWSAccountName"},{"identifier":"Name","columnName":"UserIdentityArn"},{"identifier":"ObjectGuid","columnName":"UserAgent"}]},{"entityType":"Process","fieldMappings":[{"identifier":"ProcessId","columnName":"EventName"}]},{"entityType":"IP","fieldMappings":[{"identifier":"Address","columnName":"SourceIpAddress"}]}],
+        "sentinelEntitiesMappings": [{"columnName":"ErrorMessage"}],
+        "templateVersion": null
+      }
+    }
+  ]
+}

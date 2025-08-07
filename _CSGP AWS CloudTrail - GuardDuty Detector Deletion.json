@@ -1,0 +1,74 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/969c8b1b-e4d2-4c42-9e07-f3a4aebdc852')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/969c8b1b-e4d2-4c42-9e07-f3a4aebdc852')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - GuardDuty Detector Deletion",
+                "description": "Detects when a user/role attempts to delete the GuardDuty detector. \n Handling Guidance:  1) Follow the AWS Credential Leakage / Identity Compromise IR Guide wiki if you think the user/role/account is compromised. https://wiki.costargroup.com/pages/viewpage.action?pageId=866618934  2) Notify secops about this issue even if the actions being done were unsuccessful. 3) Identify the user performing the actions and reach out (If possible).",
+                "severity": "High",
+                "enabled": true,
+                "query": "// Contributor: Wajahat Malik\r\n// Reviewer: Kamran Ahmadjan\r\n// Reference: \r\n//\r\n// Description: Detects when a user/role attempts to delete the GuardDuty Detecto. T1562 and T1629\r\n// Handling Guidance:  1) Follow the AWS Credential Leakage / Identity Compromise IR Guide wiki if you think the user/role/account is compromised. https://wiki.costargroup.com/pages/viewpage.action?pageId=866618934  2) Notify secops about this issue even if the actions being done were unsuccessful. 3) Identify the user performing the actions and reach out (If possible).\r\n//\r\n// Change notes\r\n// ------------\r\nAWSCloudTrail\r\n| where EventName has \"DeleteDetector\"\r\n| extend Severity = iff(ErrorCode has \"AccessDenied\", \"Medium\", \"High\")\r\n| project\r\n    TimeGenerated,\r\n    AwsEventId,\r\n    EventSource,\r\n    EventTypeName,\r\n    EventName,\r\n    UserIdentityPrincipalid,\r\n    UserIdentityArn, \r\n    UserIdentityAccessKeyId,\r\n    AWSRegion,\r\n    SourceIpAddress,\r\n    UserAgent,\r\n    ErrorCode,\r\n    ResponseElements,\r\n    Severity",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1629",
+                    "T1562"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertSeverityColumnName": "Severity",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "UserIdentityArn"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

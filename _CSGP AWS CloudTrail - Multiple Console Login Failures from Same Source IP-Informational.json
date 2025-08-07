@@ -1,0 +1,82 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/10c7a9bc-8c36-4f7f-b3b0-08a13e9007fe')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/10c7a9bc-8c36-4f7f-b3b0-08a13e9007fe')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Multiple Console Login Failures from Same Source IP-Informational",
+                "description": "This detection triggers when the same source IP has 5 or more console login failures in an hour. This should detect any attempted brute forcing/password guessing attempts.\n\nHandling Guidance: Determine if this IP is a known CoStar public IP address. If not, search for any other recent actions from this IP in cloudtrail, and take further action as necessary. If any other actions spotted in cloudtrail by this IP, alert SecOps to investigate.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// Contributor: Jeremy Kesterson\r\n// Reviewer: James Kim\r\n// Description: This detection triggers when the same source IP has 5 or more console login failures in an hour. This should detect any attempted brute forcing/password guessing attempts.\r\n// Handling Guidance: Determine if this IP is a known CoStar public IP address. If not, search for any other recent actions from this IP in cloudtrail, and take further action as necessary. If any other actions spotted in cloudtrail by this IP, alert SecOps to investigate.\r\n//09/26/2024 Sufian: Added isCoStarIP field \r\nlet costarIPs = toscalar(_GetWatchlist('Costar_Public_IP_Ranges')\r\n | project cidr\r\n | summarize cidrs = make_list(cidr)\r\n);\r\nAWSCloudTrail\r\n| where EventName == \"ConsoleLogin\"\r\n| where ResponseElements contains \"Failure\" or ResponseElements contains \"FailedAuthentication\"\r\n| extend TimeBin = bin(TimeGenerated, 1h)\r\n| extend inRange = ipv4_is_in_any_range(SourceIpAddress, costarIPs )\r\n| extend isCostarIP = iff (inRange == true, \"Yes\", \"No\")\r\n| summarize Count = count(), Users = make_set(UserIdentityUserName), Details = make_set(AdditionalEventData) by EventName, SourceIpAddress, isCostarIP, TimeBin\r\n| where Count >= 5",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1110"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDescriptionFormat": "Multiple failed console logins originating from {{SourceIpAddress}} were detected with details: {{Details}} ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Users"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

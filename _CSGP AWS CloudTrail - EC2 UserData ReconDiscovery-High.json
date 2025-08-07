@@ -1,0 +1,88 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/21a776f4-2f1d-4650-893a-fca962c73415')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/21a776f4-2f1d-4650-893a-fca962c73415')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-12-01-preview",
+      "properties": {
+        "queryFrequency": "PT1H",
+        "queryPeriod": "PT1H",
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "severity": "Low",
+        "suppressionDuration": "PT5H",
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "groupByEntities": [],
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "customDetails": {},
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserIdentityArn"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "EventName"
+              }
+            ]
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDynamicProperties": []
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "Reconnaissance",
+          "Discovery"
+        ],
+        "techniques": [
+          "T1082"
+        ],
+        "subTechniques": [],
+        "displayName": "_CSGP: AWS CloudTrail - EC2 UserData Recon/Discovery-Low",
+        "enabled": true,
+        "description": "AWS CloudTrail - This query identifies users attempting to retrieve EC2 instance user-data, which may contain sensitive information.\n\nHandling guidance: use '_CSGP: CloudTrail Principal Search' workbook to query for activity from the principal and understand the actions in and around the timing.  If more context is needed, reach out to the user.",
+        "alertRuleTemplateName": null,
+        "query": "//Author: Jeremy Kesterson\n//Source:  NA\n//Reviewer:\n//Description: AWS CloudTrail - This query identifies users attempting to retrieve instance userdata. It will trigger when a user has retrieved userdata 10 times in an hour.\n//Handling guidance: Ten user data retrievals within an hour is highly unusual and could be indicative of recon/discovery by a compromised AWS principal.  Alert secops to confirm that this was expected. AWS CloudTrail - This query identifies users attempting to retrieve EC2 instance user-data, which may contain sensitive information. Use '_CSGP: CloudTrail Principal Search' workbook to query for activity from the principal and understand the actions in and around the timing.  If more context is needed, reach out to the user.\n//Changelog: \n//12/06/2023 by ashina to make additions to the handling guidance.\n//02/10/2025 - wmalik - added roles \"vl-prod-devops-jenkins-us-east-1\" and  \"vl-nonprod-devops-jenkins-us-east-1\" to the exclusion list as they commonly query instance user data\n//07/31/2025 - stran1 - added role \"vl-azure-pipelines-self-hosted_us-east-1\" to exclusion list\n//\nlet lookback_ = 7d;\nlet expectedUserIdentityArns = dynamic(['vl-prod-devops-jenkins-us-east-1', 'vl-nonprod-devops-jenkins-us-east-1', 'CSGPBuildAgentRole', 'vl-azure-pipelines-self-hosted-us-east-1']);//Devops-Jekins and BuildAgent will commonly query instance user data\nAWSCloudTrail\n| where EventName == 'DescribeInstanceAttribute'\n| where not(UserIdentityArn has_any (expectedUserIdentityArns))\n| extend InstanceId = parse_json(RequestParameters).instanceId\n| extend Attribute = parse_json(RequestParameters).attribute\n| where Attribute == 'userData'\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\n| extend AccountName = name\n| make-series Events=count_distinct(tostring(InstanceId)) default=0 on TimeGenerated in range(ago(lookback_), now(), 1h) by UserIdentityArn, EventName, AccountName\n| summarize EventCount=make_list(Events, 1000), TimeGenerated=make_list(TimeGenerated, 1000) by UserIdentityArn, EventName, AccountName\n| extend (outliers, score, baseline) = series_decompose_anomalies(EventCount, 1.5, -1, \"linefit\") //anomaly detection with statistics\n| mv-expand\n    TimeGenerated,\n    EventCount to typeof(long),\n    outliers,\n    baseline to typeof(long),\n    score to typeof(double)\n| where outliers > 0 //filter for behavioral anomalies\n| where EventCount > 10 //low pass filter"
+      }
+    }
+  ]
+}

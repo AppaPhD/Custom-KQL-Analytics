@@ -1,0 +1,99 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f85b41df-55e8-47f8-8dcf-35dcc19290c0')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f85b41df-55e8-47f8-8dcf-35dcc19290c0')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "_CSGP: AWS CloudTrail - Instance Role or User Created-Medium",
+                "description": "Detects when an instance role or user is created.\n\nHandling guidance: Review how the instance role or user was created. Permissions should not be granted to make this possible.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Contributor: Vivian Tran\r\n//Reference: \r\n//Description: This analytic rule detects when an instance role or user is created. \r\n//This can happen if an instance was compromised and an attacker was attempting to gain \r\n// persistance or login to the console\r\n//Handling guidance: Permissions should not be granted to make this possible. Investigate for signs of compromise or vulnerabilities on the EC2 instance\r\n// Identify what permissions are attached to the user/role created and see what actions were attempted by it. If not expected,\r\n// work with SecOps to contain the EC2 instance\r\n\r\nlet expected_roles = dynamic([\"EUW1-PRD-PZ-\", \"EUW2-PRD-PZ-\", \"USE1-PRD-PZ-\", \"prd-banners-\"]); // 3/5/24 added by vtran.Confirmed expected behavior by Tim Terry. Roles with this prefix is used by a system that deploys apps into production\r\nAWSCloudTrail\r\n| join kind=inner _GetWatchlist('aws-accounts') on $left.UserIdentityAccountId == $right.accountid\r\n| extend AccountName = name\r\n| extend BlankField = ''\r\n| where dynamic(['CreateUser', 'CreateRole']) has EventName\r\n| where UserIdentityPrincipalid contains 'i-'\r\n| extend RoleCreated = parse_json(RequestParameters).roleName\r\n| extend UserIdentity = split(UserIdentityArn, '/')[2]\r\n| extend parsed = parse_json(RequestParameters)\r\n| extend CreatedRole = parsed.roleName\r\n| where UserIdentityArn !startswith \"arn:aws:sts::614253799013:assumed-role/prd-deployer-Role-\" and CreatedRole has_any(expected_roles)\r\n| project\r\n    TimeGenerated,\r\n    AccountName,\r\n    UserIdentity,\r\n    EventSource,\r\n    EventName,\r\n    CreatedRole,\r\n    UserIdentityArn,\r\n    UserIdentityAccountId,\r\n    SessionIssuerUserName,\r\n    SessionIssuerArn,\r\n    SessionIssuerAccountId,\r\n    ErrorCode,\r\n    ErrorMessage,\r\n    RequestParameters,\r\n    ResponseElements,\r\n    Resources,\r\n    SourceIpAddress",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "ResourceDevelopment"
+                ],
+                "techniques": [
+                    "T1585"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserIdentity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Process",
+                        "fieldMappings": [
+                            {
+                                "identifier": "CommandLine",
+                                "columnName": "EventName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "File",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "CreatedRole"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
